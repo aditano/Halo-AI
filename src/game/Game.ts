@@ -85,8 +85,8 @@ export class Game {
     this.hud = new HUD({ parent: container })
     this.menu = new MainMenu({
       parent: container,
-      title: 'RAINFALL',
-      subtitle: 'Mission 01 · Ringfall',
+      title: 'RINGFALL',
+      subtitle: 'Infinite Protocols',
       onPlay: () => this.start(),
       requestPointerLockTarget: this.renderer.renderer.domElement,
     })

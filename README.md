@@ -1,16 +1,8 @@
-# Rainfall
+# Ringfall
 
 A Halo Infinite–inspired first-person shooter in **Three.js**.
 
-## Naming
-
-| Layer | Name | Meaning |
-|--------|------|---------|
-| **Game / product** | **Rainfall** | The title of this project |
-| **Mission** | **Ringfall** | Opening campaign mission (shown on the menu) |
-| **GitHub repo** | `Halo-AI` (current) | Rename in GitHub → Settings → General if you want the remote to match |
-
-Halo games work the same way: franchise/product title vs individual mission names (e.g. *Halo Infinite* → “Warship Gbraakon”).
+**Ringfall** is the game title (product name). Campaign missions can be named separately later if you add a mission select screen.
 
 ## Run
 

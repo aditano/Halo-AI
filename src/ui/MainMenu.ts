@@ -190,8 +190,8 @@ export class MainMenu {
     ensureFonts()
     ensureStyles()
 
-    const title = opts.title ?? 'RAINFALL'
-    const subtitle = opts.subtitle ?? 'Mission 01 · Ringfall'
+    const title = opts.title ?? 'RINGFALL'
+    const subtitle = opts.subtitle ?? 'Infinite Protocols'
     this.onPlay = opts.onPlay ?? null
     this.onSettings = opts.onSettings ?? null
     this.pointerLockTarget = opts.requestPointerLockTarget ?? document.body
