@@ -35,6 +35,7 @@ export class Game {
   private statusEl: HTMLElement | null = null
   private readonly lookDir = new THREE.Vector3()
   private menuMusicStarted = false
+  private readonly heardProjectiles = new WeakSet<object>()
 
   constructor(container: HTMLElement) {
     this.renderer = createRenderer(container)
@@ -256,6 +257,7 @@ export class Game {
       this.damage.update(dt)
       this.enemies.update(dt, this.player.position)
       this.projectiles.update(dt)
+      this.hearWorldProjectiles()
       this.resolveProjectileHits()
       this.effects.update(dt)
       this.effects.applyShakeToCamera(this.renderer.camera, dt)
@@ -291,6 +293,14 @@ export class Game {
 
     this.renderer.render(dt)
     requestAnimationFrame((t) => this.frame(t))
+  }
+
+  private hearWorldProjectiles() {
+    for (const p of this.projectiles.projectiles) {
+      if (p.fromPlayer || this.heardProjectiles.has(p)) continue
+      this.heardProjectiles.add(p)
+      this.audio.plasmaFireAt(p.mesh.position)
+    }
   }
 
   private resolveProjectileHits() {

@@ -40,6 +40,7 @@ export class MusicDirector {
 
   attach(master: GainNode): void {
     this.ctx = this.getContext()
+    if (this.musicBus) return
     this.musicBus = this.ctx.createGain()
     this.musicBus.gain.value = 0.32
     this.musicBus.connect(master)

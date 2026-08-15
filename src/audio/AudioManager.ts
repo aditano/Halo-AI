@@ -9,7 +9,6 @@ import { MusicDirector, type MusicMode } from './MusicDirector'
 export interface AudioManagerOptions {
   masterVolume?: number
   sfxVolume?: number
-  musicVolume?: number
 }
 
 export type Vec3Like = { x: number; y: number; z: number }
