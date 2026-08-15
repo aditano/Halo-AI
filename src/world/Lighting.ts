@@ -1,0 +1,138 @@
+import * as THREE from 'three';
+import { HaloPalette } from '../rendering/Materials';
+
+export interface LightingSystem {
+  sun: THREE.DirectionalLight;
+  fill: THREE.DirectionalLight;
+  hemi: THREE.HemisphereLight;
+  ambient: THREE.AmbientLight;
+  lightShafts: THREE.Group;
+  /** Advance optional drifting light-shaft planes. */
+  update: (deltaSeconds: number) => void;
+  dispose: () => void;
+}
+
+export interface LightingOptions {
+  /** Include translucent god-ray planes that drift slowly. Default true. */
+  lightShafts?: boolean;
+  /** Arena radius used to size shafts / shadow camera. Default 80. */
+  arenaRadius?: number;
+}
+
+/**
+ * Cinematic outdoor lighting: warm key sun, cool fill, hemisphere sky bounce,
+ * soft contact ambient — bright Halo Infinite daytime, not cyberpunk gloom.
+ */
+export function setupLighting(
+  scene: THREE.Scene,
+  options: LightingOptions = {},
+): LightingSystem {
+  const arenaRadius = options.arenaRadius ?? 80;
+  const enableShafts = options.lightShafts !== false;
+
+  // Warm key — high sun angle, golden Forerunner afternoon.
+  const sun = new THREE.DirectionalLight(HaloPalette.warmSun, 2.35);
+  sun.position.set(48, 72, 28);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.00018;
+  sun.shadow.normalBias = 0.035;
+  const extent = arenaRadius * 1.15;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far = extent * 3;
+  sun.shadow.camera.left = -extent;
+  sun.shadow.camera.right = extent;
+  sun.shadow.camera.top = extent;
+  sun.shadow.camera.bottom = -extent;
+  sun.shadow.camera.updateProjectionMatrix();
+  scene.add(sun);
+  scene.add(sun.target);
+  sun.target.position.set(0, 0, 0);
+
+  // Cool teal fill from opposite sky.
+  const fill = new THREE.DirectionalLight(HaloPalette.coolFill, 0.55);
+  fill.position.set(-36, 22, -42);
+  fill.castShadow = false;
+  scene.add(fill);
+
+  // Sky / ground bounce.
+  const hemi = new THREE.HemisphereLight(
+    HaloPalette.skyTeal,
+    HaloPalette.terrainDirt,
+    0.72,
+  );
+  scene.add(hemi);
+
+  // Soft contact-ish ambient so shadowed cover stays readable for FPS play.
+  const ambient = new THREE.AmbientLight(0xc8dce4, 0.28);
+  scene.add(ambient);
+
+  const lightShafts = new THREE.Group();
+  lightShafts.name = 'LightShafts';
+  scene.add(lightShafts);
+
+  const shaftMeshes: THREE.Mesh[] = [];
+  if (enableShafts) {
+    const shaftMat = new THREE.MeshBasicMaterial({
+      color: 0xffe6b8,
+      transparent: true,
+      opacity: 0.045,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    });
+
+    for (let i = 0; i < 5; i++) {
+      const w = 4 + (i % 3) * 2.5;
+      const h = 55 + (i % 2) * 18;
+      const geo = new THREE.PlaneGeometry(w, h);
+      const mesh = new THREE.Mesh(geo, shaftMat.clone());
+      const angle = (i / 5) * Math.PI * 2 + 0.4;
+      const dist = 12 + i * 7;
+      mesh.position.set(Math.cos(angle) * dist, h * 0.35, Math.sin(angle) * dist);
+      mesh.rotation.y = -angle + Math.PI * 0.5;
+      mesh.rotation.z = THREE.MathUtils.degToRad(12 + i * 3);
+      mesh.userData.driftSpeed = 0.04 + i * 0.01;
+      mesh.userData.baseY = mesh.position.y;
+      mesh.renderOrder = 1;
+      lightShafts.add(mesh);
+      shaftMeshes.push(mesh);
+    }
+  }
+
+  let elapsed = 0;
+
+  return {
+    sun,
+    fill,
+    hemi,
+    ambient,
+    lightShafts,
+    update(deltaSeconds: number) {
+      elapsed += deltaSeconds;
+      for (const mesh of shaftMeshes) {
+        const speed = mesh.userData.driftSpeed as number;
+        mesh.position.y = (mesh.userData.baseY as number) + Math.sin(elapsed * speed) * 1.2;
+        mesh.rotation.z += deltaSeconds * speed * 0.15;
+        const mat = mesh.material as THREE.MeshBasicMaterial;
+        mat.opacity = 0.035 + Math.sin(elapsed * speed * 1.5) * 0.015;
+      }
+    },
+    dispose() {
+      scene.remove(sun);
+      scene.remove(sun.target);
+      scene.remove(fill);
+      scene.remove(hemi);
+      scene.remove(ambient);
+      scene.remove(lightShafts);
+      for (const mesh of shaftMeshes) {
+        mesh.geometry.dispose();
+        (mesh.material as THREE.Material).dispose();
+      }
+      sun.dispose();
+      fill.dispose();
+      hemi.dispose();
+      ambient.dispose();
+    },
+  };
+}
