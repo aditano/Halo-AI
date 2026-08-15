@@ -4,9 +4,9 @@ export {
   type HUDVitals,
   type HUDOptions,
   type CrosshairMode,
-} from './HUD.ts'
+} from './HUD'
 
 export {
   MainMenu,
   type MainMenuOptions,
-} from './MainMenu.ts'
+} from './MainMenu'

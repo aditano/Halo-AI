@@ -583,12 +583,9 @@ export class HUD {
     this.banner.classList.add('rf-show')
   }
 
-  /** Soft per-frame updates (heat bloom decay hooks, etc.). */
-  update(dt: number): void {
-    if (this.heat > 0 && !this.ads) {
-      // Visual only — game systems own real heat; this gently eases bloom if setHeat isn't called
-      void dt
-    }
+  /** Soft per-frame updates (reserved for animated HUD elements). */
+  update(_dt: number): void {
+    // Reticle bloom / vitals are driven by setters from Game.syncHud
   }
 
   dispose(): void {
