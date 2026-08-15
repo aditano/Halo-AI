@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { HaloPalette } from '../rendering/Materials';
 
 export interface SkyAtmosphere {
   sky: THREE.Mesh;
@@ -73,20 +72,20 @@ export function createSkyAtmosphere(
 ): SkyAtmosphere {
   const radius = options.radius ?? 900;
 
-  const zenith = new THREE.Color(0x4aa8bc);
-  const horizon = new THREE.Color(HaloPalette.skyHorizonGold);
-  const ground = new THREE.Color(0x7a9a88);
-  const fogColor = new THREE.Color(0x9ec4d2);
+  const zenith = new THREE.Color(0x4eb8d0);
+  const horizon = new THREE.Color(0xf2d498);
+  const ground = new THREE.Color(0x6a9a78);
+  const fogColor = new THREE.Color(0xb0d4e0);
 
-  const sunDirection = new THREE.Vector3(48, 72, 28).normalize();
+  const sunDirection = new THREE.Vector3(42, 85, 22).normalize();
 
   const uniforms = {
     uZenith: { value: zenith },
     uHorizon: { value: horizon },
     uGround: { value: ground },
     uSunDirection: { value: sunDirection.clone() },
-    uSunIntensity: { value: 0.55 },
-    uGlowPower: { value: 28.0 },
+    uSunIntensity: { value: 0.72 },
+    uGlowPower: { value: 36.0 },
   };
 
   const skyMat = new THREE.ShaderMaterial({
@@ -124,8 +123,8 @@ export function createSkyAtmosphere(
   const ringBand = createRingWorldBand(radius * 0.88);
   scene.add(ringBand);
 
-  scene.fog = new THREE.FogExp2(0x9ec4d2, 0.0045);
-  scene.background = new THREE.Color(0x6a9eae);
+  scene.fog = new THREE.FogExp2(0xb8d8e4, 0.0032);
+  scene.background = new THREE.Color(0x6eb8cc);
 
   return {
     sky,

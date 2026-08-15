@@ -190,8 +190,8 @@ export class MainMenu {
     ensureFonts()
     ensureStyles()
 
-    const title = opts.title ?? 'RINGFALL'
-    const subtitle = opts.subtitle ?? 'Combat Evolved · Infinite Protocols'
+    const title = opts.title ?? 'RAINFALL'
+    const subtitle = opts.subtitle ?? 'Mission 01 · Ringfall'
     this.onPlay = opts.onPlay ?? null
     this.onSettings = opts.onSettings ?? null
     this.pointerLockTarget = opts.requestPointerLockTarget ?? document.body
@@ -205,7 +205,7 @@ export class MainMenu {
     this.root.innerHTML = `
       <div class="rf-menu-bg"></div>
       <div class="rf-menu-panel">
-        <div class="rf-menu-eyebrow">Installation 04</div>
+        <div class="rf-menu-eyebrow">Rainfall // Campaign</div>
         <h1 class="rf-menu-title">${escapeHtml(title)}</h1>
         <p class="rf-menu-sub">${escapeHtml(subtitle)}</p>
         <div class="rf-menu-actions">

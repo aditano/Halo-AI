@@ -74,7 +74,7 @@ export function createRenderer(
 ): RendererBundle {
   const maxPixelRatio = options.maxPixelRatio ?? 2;
   const enableVignette = options.vignette !== false;
-  const bloomStrength = options.bloomStrength ?? 0.55;
+  const bloomStrength = options.bloomStrength ?? 0.42;
 
   const width = Math.max(1, container.clientWidth || window.innerWidth);
   const height = Math.max(1, container.clientHeight || window.innerHeight);
@@ -100,7 +100,7 @@ export function createRenderer(
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
+  renderer.toneMappingExposure = 1.18;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.domElement.style.display = 'block';

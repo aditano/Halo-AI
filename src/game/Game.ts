@@ -13,6 +13,7 @@ import { EnemyManager } from '../enemies/EnemyManager'
 import { HUD } from '../ui/HUD'
 import { MainMenu } from '../ui/MainMenu'
 import { HaloCEMenuWorld } from '../ui/HaloCEMenuWorld'
+import { applyEnvironmentMap } from '../rendering/EnvironmentMap'
 
 export class Game {
   private running = false
@@ -39,6 +40,7 @@ export class Game {
 
   constructor(container: HTMLElement) {
     this.renderer = createRenderer(container)
+    applyEnvironmentMap(this.renderer.renderer, this.renderer.scene)
     this.sky = createSkyAtmosphere(this.renderer.scene)
     this.lighting = setupLighting(this.renderer.scene)
 
@@ -83,8 +85,8 @@ export class Game {
     this.hud = new HUD({ parent: container })
     this.menu = new MainMenu({
       parent: container,
-      title: 'RINGFALL',
-      subtitle: 'Combat Evolved · Infinite Protocols',
+      title: 'RAINFALL',
+      subtitle: 'Mission 01 · Ringfall',
       onPlay: () => this.start(),
       requestPointerLockTarget: this.renderer.renderer.domElement,
     })

@@ -5,6 +5,8 @@ import {
   createEnergyBridge,
   createEnergyGlass,
   createTerrainVertexColored,
+  createTerrainGrass,
+  createTerrainDirt,
   createCrateMetal,
   createRock,
   createUnscMatte,
@@ -76,6 +78,7 @@ export function buildEnvironment(
 
   // --- Gameplay cover --------------------------------------------------------
   scatterCover(root, radius, colliders, disposables, rng);
+  placeFoliageClumps(root, radius, disposables, rng);
 
   // Player spawns — open sightlines, not inside geometry.
   const spawnPoints: SpawnPoint[] = [
@@ -597,6 +600,40 @@ function scatterCover(
 }
 
 // ---------------------------------------------------------------------------
+function placeFoliageClumps(
+  root: THREE.Group,
+  radius: number,
+  disposables: Array<{ geometry?: THREE.BufferGeometry }>,
+  rng: () => number,
+): void {
+  const leaf = createTerrainGrass({ color: 0x4a8a3a });
+  const trunk = createTerrainDirt({ color: 0x5a4a32 });
+  for (let i = 0; i < 36; i++) {
+    const { x, z } = randomAnnulus(rng, radius * 0.42, radius * 0.88);
+    // Keep clear of central plaza
+    if (Math.hypot(x, z) < 16) continue;
+    const g = new THREE.Group();
+    g.position.set(x, 0, z);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.9, 5), trunk);
+    stem.position.y = 0.45;
+    stem.castShadow = true;
+    g.add(stem);
+    disposables.push({ geometry: stem.geometry });
+    for (let j = 0; j < 3; j++) {
+      const canopy = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.55 + rng() * 0.35, 0),
+        leaf,
+      );
+      canopy.position.set((rng() - 0.5) * 0.4, 1.1 + j * 0.35, (rng() - 0.5) * 0.4);
+      canopy.scale.set(1.2, 0.75, 1.1);
+      canopy.castShadow = true;
+      g.add(canopy);
+      disposables.push({ geometry: canopy.geometry });
+    }
+    root.add(g);
+  }
+}
+
 // Math / helpers
 // ---------------------------------------------------------------------------
 

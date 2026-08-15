@@ -2,19 +2,19 @@ import * as THREE from 'three';
 
 /** Halo Infinite palette — teal skies, warm metal, cyan Forerunner energy. */
 export const HaloPalette = {
-  forerunnerMetal: 0x2a3238,
-  forerunnerAccent: 0xc4783a,
-  forerunnerEmissive: 0x3de8ff,
+  forerunnerMetal: 0x3a4550,
+  forerunnerAccent: 0xd4924a,
+  forerunnerEmissive: 0x5ef0ff,
   unscMatte: 0x5c6358,
   unscAccent: 0x3d4a3a,
-  energyGlass: 0x6ef0ff,
-  terrainGrass: 0x4a7a3a,
-  terrainDirt: 0x6b5a3e,
-  terrainMetal: 0x4a555c,
-  warmSun: 0xffd4a0,
-  coolFill: 0x8ec8d8,
-  skyTeal: 0x5eb8c8,
-  skyHorizonGold: 0xe8c878,
+  energyGlass: 0x7af5ff,
+  terrainGrass: 0x5a9a48,
+  terrainDirt: 0x7a6a48,
+  terrainMetal: 0x5a6670,
+  warmSun: 0xffe8cc,
+  coolFill: 0xa8dff0,
+  skyTeal: 0x6ec8dc,
+  skyHorizonGold: 0xf0d090,
   plasma: 0xc44dff,
   plasmaCore: 0xff66ee,
 } as const;
@@ -137,18 +137,22 @@ export function createForerunnerMetal(options?: {
 
   const mat = new THREE.MeshStandardMaterial({
     color: options?.color ?? HaloPalette.forerunnerMetal,
-    roughness: options?.roughness ?? 0.35,
-    metalness: options?.metalness ?? 0.92,
+    roughness: options?.roughness ?? 0.28,
+    metalness: options?.metalness ?? 0.95,
     emissive: new THREE.Color(HaloPalette.forerunnerEmissive),
-    emissiveIntensity: options?.emissiveIntensity ?? 0.18,
-    envMapIntensity: 1.15,
-    map: proceduralPanelMap(256, 0x2a3238, 0x3a4550),
-    roughnessMap: proceduralNoiseMap(128, 0.25, 0.55),
+    emissiveIntensity: options?.emissiveIntensity ?? 0.22,
+    envMapIntensity: 1.45,
+    map: proceduralPanelMap(512, 0x3a4550, 0x5a6a78),
+    roughnessMap: proceduralNoiseMap(256, 0.18, 0.55),
+    bumpMap: proceduralNoiseMap(256, 0.35, 0.65),
+    bumpScale: 0.04,
   });
   mat.map!.colorSpace = THREE.SRGBColorSpace;
   mat.map!.wrapS = mat.map!.wrapT = THREE.RepeatWrapping;
-  mat.map!.repeat.set(2, 4);
+  mat.map!.repeat.set(2.5, 5);
+  mat.map!.anisotropy = 8;
   mat.roughnessMap!.wrapS = mat.roughnessMap!.wrapT = THREE.RepeatWrapping;
+  mat.bumpMap!.wrapS = mat.bumpMap!.wrapT = THREE.RepeatWrapping;
   cache.set(key, mat);
   return mat;
 }
@@ -203,15 +207,18 @@ export function createEnergyGlass(options?: {
 
   const mat = new THREE.MeshPhysicalMaterial({
     color: HaloPalette.energyGlass,
-    roughness: 0.08,
+    roughness: 0.06,
     metalness: 0.05,
-    transmission: 0.72,
-    thickness: 0.35,
+    transmission: 0.78,
+    thickness: 0.45,
     ior: 1.35,
     transparent: true,
     opacity: options?.opacity ?? 0.55,
-    emissive: new THREE.Color(HaloPalette.forerunnerEmissive),
-    emissiveIntensity: options?.emissiveIntensity ?? 0.65,
+    emissive: new THREE.Color(HaloPalette.energyGlass),
+    emissiveIntensity: options?.emissiveIntensity ?? 0.9,
+    envMapIntensity: 1.6,
+    clearcoat: 1,
+    clearcoatRoughness: 0.08,
     side: THREE.DoubleSide,
     depthWrite: false,
   });

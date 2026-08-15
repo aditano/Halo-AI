@@ -1,5 +1,5 @@
 {
-  "name": "halo-ai-infinite",
+  "name": "rainfall",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,7 +13,7 @@
     "typescript": "~6.0.2",
     "vite": "^8.2.0"
   },
-  "description": "Halo Infinite-inspired AAA-quality FPS in Three.js",
+  "description": "Rainfall — Halo Infinite-inspired FPS in Three.js",
   "dependencies": {
     "three": "^0.185.1"
   }

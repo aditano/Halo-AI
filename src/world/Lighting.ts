@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { HaloPalette } from '../rendering/Materials';
 
 export interface LightingSystem {
   sun: THREE.DirectionalLight;
@@ -30,14 +29,14 @@ export function setupLighting(
   const arenaRadius = options.arenaRadius ?? 80;
   const enableShafts = options.lightShafts !== false;
 
-  // Warm key — high sun angle, golden Forerunner afternoon.
-  const sun = new THREE.DirectionalLight(HaloPalette.warmSun, 1.95);
-  sun.position.set(48, 72, 28);
+  // Bright Infinite-style key — slightly cooler white-gold.
+  const sun = new THREE.DirectionalLight(0xffe8cc, 2.15);
+  sun.position.set(42, 85, 22);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.bias = -0.00018;
-  sun.shadow.normalBias = 0.035;
-  sun.shadow.radius = 3;
+  sun.shadow.mapSize.set(4096, 4096);
+  sun.shadow.bias = -0.00012;
+  sun.shadow.normalBias = 0.04;
+  sun.shadow.radius = 4.5;
   const extent = arenaRadius * 1.15;
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = extent * 3;
@@ -51,21 +50,17 @@ export function setupLighting(
   sun.target.position.set(0, 0, 0);
 
   // Cool teal fill from opposite sky.
-  const fill = new THREE.DirectionalLight(HaloPalette.coolFill, 0.55);
-  fill.position.set(-36, 22, -42);
+  const fill = new THREE.DirectionalLight(0xa8dff0, 0.7);
+  fill.position.set(-36, 28, -42);
   fill.castShadow = false;
   scene.add(fill);
 
   // Sky / ground bounce.
-  const hemi = new THREE.HemisphereLight(
-    HaloPalette.skyTeal,
-    HaloPalette.terrainDirt,
-    0.72,
-  );
+  const hemi = new THREE.HemisphereLight(0x8ed4e8, 0x5a6a48, 0.85);
   scene.add(hemi);
 
   // Soft contact-ish ambient so shadowed cover stays readable for FPS play.
-  const ambient = new THREE.AmbientLight(0xb8d8e8, 0.38);
+  const ambient = new THREE.AmbientLight(0xc8e4f0, 0.32);
   scene.add(ambient);
 
   const lightShafts = new THREE.Group();

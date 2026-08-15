@@ -1,6 +1,16 @@
-# RINGFALL — Infinite Protocols
+# Rainfall
 
-A Halo Infinite–inspired first-person shooter built in **Three.js**.
+A Halo Infinite–inspired first-person shooter in **Three.js**.
+
+## Naming
+
+| Layer | Name | Meaning |
+|--------|------|---------|
+| **Game / product** | **Rainfall** | The title of this project |
+| **Mission** | **Ringfall** | Opening campaign mission (shown on the menu) |
+| **GitHub repo** | `Halo-AI` (current) | Rename in GitHub → Settings → General if you want the remote to match |
+
+Halo games work the same way: franchise/product title vs individual mission names (e.g. *Halo Infinite* → “Warship Gbraakon”).
 
 ## Run
 
@@ -18,7 +28,7 @@ npm run dev
 | LMB | Fire |
 | RMB | Aim down sights |
 | R | Reload |
-| 1 / 2 / 3 | BR-75 / MA40 / Plasma Pistol |
+| 1 / 2 / 3 | BR / AR / Plasma |
 | Scroll / Q | Cycle weapons |
 | Shift | Sprint |
 | Space | Jump |
@@ -26,7 +36,7 @@ npm run dev
 
 ## Stack
 
-- Vite + TypeScript
-- Three.js (PBR materials, shadows, ACES tonemapping)
-- Custom shader sky + bloom / FXAA / vignette post stack
-- Procedural weapons, enemies, VFX, and Web Audio SFX
+- Vite + TypeScript + Three.js
+- PBR + environment reflections, bloom / SMAA, ACES tonemapping
+- Positional HRTF audio + dynamic combat music
+- Halo CE–style title ring + procedural choir bed
