@@ -342,8 +342,12 @@ export function createTerrainVertexColored(): THREE.MeshStandardMaterial {
     roughness: 0.9,
     metalness: 0.15,
     vertexColors: true,
-    envMapIntensity: 0.4,
+    envMapIntensity: 0.55,
+    map: proceduralGrassMap(256),
   });
+  mat.map!.colorSpace = THREE.SRGBColorSpace;
+  mat.map!.wrapS = mat.map!.wrapT = THREE.RepeatWrapping;
+  mat.map!.repeat.set(18, 18);
   cache.set(key, mat);
   return mat;
 }

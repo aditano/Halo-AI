@@ -147,22 +147,24 @@ function createArenaGround(
     if (dist < 10) y *= dist / 10;
     pos.setY(i, y);
 
-    // Vertex colors: metal rings, grass patches, dirt.
+    // Vertex colors: metal rings, grass patches, dirt — high contrast for readable detail.
     const ring = Math.abs(Math.sin(dist * 0.35));
     let c: THREE.Color;
     if (ring > 0.82 && dist > 8) {
-      c = metal;
-    } else if (n > 0.35) {
-      c = grass;
-    } else if (n < -0.15) {
-      c = dirt;
+      c = metal.clone().offsetHSL(0, 0, 0.08);
+    } else if (n > 0.25) {
+      c = grass.clone().offsetHSL(0, 0.05, 0.06 + n * 0.08);
+    } else if (n < -0.1) {
+      c = dirt.clone().offsetHSL(0, 0, -0.05);
     } else {
-      c = grass.clone().lerp(dirt, 0.35 + n * 0.2);
+      c = grass.clone().lerp(dirt, 0.45 + n * 0.25);
     }
     // Warm accent near mid-radius Forerunner inlays.
     if (dist > 20 && dist < 28 && ring > 0.7) {
-      c = c.clone().lerp(accent, 0.4);
+      c = c.clone().lerp(accent, 0.55);
     }
+    // Micro variation so the surface doesn't read as flat paint.
+    c.offsetHSL((rng() - 0.5) * 0.04, (rng() - 0.5) * 0.06, (rng() - 0.5) * 0.07);
     colors[i * 3] = c.r;
     colors[i * 3 + 1] = c.g;
     colors[i * 3 + 2] = c.b;

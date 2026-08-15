@@ -126,8 +126,8 @@ export function createSkyAtmosphere(
   const ringBand = createRingWorldBand(radius * 0.88);
   scene.add(ringBand);
 
-  scene.fog = new THREE.Fog(fogColor, fogNear, fogFar);
-  scene.background = fogColor.clone();
+  scene.fog = new THREE.FogExp2(0x9ec4d2, 0.0045);
+  scene.background = new THREE.Color(0x6a9eae);
 
   return {
     sky,

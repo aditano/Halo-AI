@@ -77,7 +77,7 @@ export function setupLighting(
     const shaftMat = new THREE.MeshBasicMaterial({
       color: 0xffe6b8,
       transparent: true,
-      opacity: 0.08,
+      opacity: 0.04,
       depthWrite: false,
       side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
@@ -116,7 +116,7 @@ export function setupLighting(
         mesh.position.y = (mesh.userData.baseY as number) + Math.sin(elapsed * speed) * 1.2;
         mesh.rotation.z += deltaSeconds * speed * 0.15;
         const mat = mesh.material as THREE.MeshBasicMaterial;
-        mat.opacity = 0.06 + Math.sin(elapsed * speed * 1.5) * 0.03;
+        mat.opacity = 0.028 + Math.sin(elapsed * speed * 1.5) * 0.012;
       }
     },
     dispose() {
