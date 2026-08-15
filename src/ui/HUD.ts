@@ -49,6 +49,25 @@ const HUD_CSS = `
   transition: opacity 0.45s ease;
   user-select: none;
 }
+.rf-hud::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(94, 234, 212, 0.035) 3px
+  );
+  animation: rf-scanline 8s linear infinite;
+  opacity: 0.7;
+  mix-blend-mode: soft-light;
+}
+@keyframes rf-scanline {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(6px); }
+}
 .rf-hud.rf-visible { opacity: 1; }
 
 .rf-hud * { box-sizing: border-box; }
@@ -62,6 +81,7 @@ const HUD_CSS = `
   height: 36px;
   transform: translate(-50%, -50%);
   transition: width 0.12s ease, height 0.12s ease, filter 0.12s ease;
+  filter: drop-shadow(0 0 10px rgba(255, 154, 60, 0.55));
 }
 .rf-reticle::before,
 .rf-reticle::after {
@@ -82,11 +102,11 @@ const HUD_CSS = `
 .rf-reticle-dot {
   position: absolute;
   left: 50%; top: 50%;
-  width: 3px; height: 3px;
-  margin: -1.5px 0 0 -1.5px;
+  width: 5px; height: 5px;
+  margin: -2.5px 0 0 -2.5px;
   background: var(--rf-orange-hot);
   border-radius: 50%;
-  box-shadow: 0 0 8px var(--rf-orange);
+  box-shadow: 0 0 12px var(--rf-orange);
 }
 .rf-reticle.rf-bloom {
   filter: drop-shadow(0 0 4px rgba(255, 154, 60, 0.9));

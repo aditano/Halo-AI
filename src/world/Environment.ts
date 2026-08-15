@@ -293,6 +293,26 @@ function placePillars(
     disposables.push({ geometry: shaft.geometry });
     colliders.push(aabbFromObject(shaft));
 
+    // Greeble plates + tech nodes for silhouette detail.
+    for (let g = 0; g < 3; g++) {
+      const plate = new THREE.Mesh(
+        new THREE.BoxGeometry(1.95, 0.35 + rng() * 0.4, 0.22),
+        accent,
+      );
+      plate.position.set(x, 2 + g * (h * 0.22), z);
+      plate.rotation.y = angle + Math.PI / 4;
+      plate.castShadow = true;
+      root.add(plate);
+      disposables.push({ geometry: plate.geometry });
+    }
+    const node = new THREE.Mesh(
+      new THREE.BoxGeometry(0.55, 0.55, 0.55),
+      createEnergyBridge({ emissiveIntensity: 1.2 }),
+    );
+    node.position.set(x + Math.cos(angle) * 1.2, 1.1, z + Math.sin(angle) * 1.2);
+    root.add(node);
+    disposables.push({ geometry: node.geometry });
+
     // Cap fin.
     const cap = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.45, 0.7), accent);
     cap.position.set(x, h + 0.1, z);

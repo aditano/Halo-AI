@@ -354,11 +354,23 @@ export class Enemy {
       crest.rotation.x = 0.4
       tag(crest)
       this.group.add(crest)
+      for (const side of [-1, 1] as const) {
+        const mandible = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.26, 0.07), this.accentMat)
+        mandible.position.set(side * 0.14, head.position.y - 0.12, 0.16)
+        mandible.rotation.z = side * 0.4
+        tag(mandible)
+        this.group.add(mandible)
+      }
     } else {
       const tank = new THREE.Mesh(new THREE.SphereGeometry(0.22, 8, 6), this.accentMat)
       tank.position.set(0, torso.position.y + 0.05, -0.28)
       tag(tank)
       this.group.add(tank)
+      const beak = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.2, 4), this.accentMat)
+      beak.rotation.x = Math.PI / 2
+      beak.position.set(0, head.position.y - 0.02, 0.22)
+      tag(beak, true)
+      this.group.add(beak)
     }
 
     for (const side of [-1, 1]) {

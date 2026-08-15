@@ -495,6 +495,10 @@ function buildBR(): THREE.Group {
   g.add(mesh(new THREE.BoxGeometry(0.1, 0.13, 0.56), body, 0, 0, -0.12))
   g.add(mesh(new THREE.BoxGeometry(0.045, 0.045, 0.4), forerunnerMetal(0.25), 0, 0.02, -0.52))
   g.add(mesh(new THREE.BoxGeometry(0.06, 0.07, 0.16), forerunnerGold(), 0, 0.11, -0.08))
+  const ringA = mesh(new THREE.TorusGeometry(0.032, 0.005, 6, 14), forerunnerGold(), 0, 0.13, -0.04)
+  g.add(ringA)
+  const ringB = mesh(new THREE.TorusGeometry(0.032, 0.005, 6, 14), forerunnerGold(), 0, 0.13, -0.12)
+  g.add(ringB)
   g.add(mesh(new THREE.BoxGeometry(0.055, 0.15, 0.09), dark, 0, -0.13, 0.02))
   g.add(mesh(new THREE.BoxGeometry(0.08, 0.1, 0.2), body, 0, -0.01, 0.34))
   g.add(mesh(new THREE.BoxGeometry(0.105, 0.025, 0.12), forerunnerGold(), 0, -0.04, -0.2))
@@ -517,6 +521,18 @@ function buildAR(): THREE.Group {
   g.add(grip)
   g.add(mesh(new THREE.BoxGeometry(0.125, 0.025, 0.08), forerunnerGold(), 0, 0.04, 0.18))
   g.add(mesh(new THREE.BoxGeometry(0.09, 0.1, 0.18), body, 0, 0, 0.32))
+  const led = mesh(
+    new THREE.BoxGeometry(0.035, 0.018, 0.05),
+    new THREE.MeshStandardMaterial({
+      color: 0x3ee0c5,
+      emissive: 0x3ee0c5,
+      emissiveIntensity: 1.5,
+    }),
+    0.045,
+    0.1,
+    -0.04,
+  )
+  g.add(led)
   return g
 }
 
@@ -534,7 +550,7 @@ function buildPlasma(): THREE.Group {
     new THREE.MeshStandardMaterial({
       color: 0x3cff9a,
       emissive: 0x1aff80,
-      emissiveIntensity: 0.6,
+      emissiveIntensity: 1.1,
       metalness: 0.15,
       roughness: 0.25,
     }),
@@ -544,6 +560,21 @@ function buildPlasma(): THREE.Group {
   )
   core.name = 'plasmaCore'
   g.add(core)
+  for (let i = 0; i < 3; i++) {
+    const coil = mesh(
+      new THREE.TorusGeometry(0.075 + i * 0.012, 0.007, 6, 16),
+      new THREE.MeshStandardMaterial({
+        color: 0x5dffb0,
+        emissive: 0x3cff9a,
+        emissiveIntensity: 0.85 + i * 0.25,
+      }),
+      0,
+      0.02,
+      -0.04 - i * 0.045,
+    )
+    coil.rotation.y = 0.25
+    g.add(coil)
+  }
   const grip = mesh(new THREE.BoxGeometry(0.06, 0.14, 0.08), shell, 0, -0.11, 0.06)
   grip.rotation.x = 0.35
   g.add(grip)

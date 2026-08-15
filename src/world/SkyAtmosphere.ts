@@ -72,13 +72,13 @@ export function createSkyAtmosphere(
   options: SkyAtmosphereOptions = {},
 ): SkyAtmosphere {
   const radius = options.radius ?? 900;
-  const fogNear = options.fogNear ?? 60;
-  const fogFar = options.fogFar ?? 280;
+  const fogNear = options.fogNear ?? 90;
+  const fogFar = options.fogFar ?? 380;
 
   const zenith = new THREE.Color(0x4aa8bc);
   const horizon = new THREE.Color(HaloPalette.skyHorizonGold);
   const ground = new THREE.Color(0x7a9a88);
-  const fogColor = horizon.clone().lerp(zenith, 0.25);
+  const fogColor = new THREE.Color(0xa8c8d4);
 
   const sunDirection = new THREE.Vector3(48, 72, 28).normalize();
 

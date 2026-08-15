@@ -30,6 +30,8 @@ export class Game {
   private readonly hud: HUD
   private readonly menu: MainMenu
   private statusEl: HTMLElement | null = null
+  private menuCamT = 0
+  private readonly menuCamTarget = new THREE.Vector3(0, 4, 0)
 
   constructor(container: HTMLElement) {
     this.renderer = createRenderer(container)
@@ -139,7 +141,11 @@ export class Game {
     this.menu.hide()
     this.hud.show()
     this.hud.showBanner(`WAVE ${Math.max(1, this.enemies.waveNumber || 1)}`)
+    this.weapons.group.visible = true
     this.player.lock()
+    // Snap camera out of menu orbit into player eyes.
+    this.renderer.camera.position.copy(this.player.position)
+    this.renderer.camera.rotation.set(0, 0, 0)
     if (this.enemies.enemies.filter((e) => e.alive).length === 0) {
       this.enemies.startWave(6)
     }
@@ -170,6 +176,23 @@ export class Game {
 
     this.lighting.update(dt)
     this.sky.update(this.renderer.camera)
+
+    // Cinematic orbit while on menu so the live arena reads as the backdrop.
+    if (!this.running || !this.player.locked) {
+      this.weapons.group.visible = false
+      this.menuCamT += dt * 0.12
+      const r = 28
+      this.renderer.camera.position.set(
+        Math.cos(this.menuCamT) * r,
+        8 + Math.sin(this.menuCamT * 0.7) * 1.5,
+        Math.sin(this.menuCamT) * r,
+      )
+      this.renderer.camera.lookAt(this.menuCamTarget)
+      this.renderer.setBloom(0.7)
+    } else {
+      this.weapons.group.visible = true
+      this.renderer.setBloom(0.45)
+    }
 
     if (this.running && this.player.locked && this.damage.alive) {
       this.player.update(dt)

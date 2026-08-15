@@ -74,7 +74,7 @@ export function createRenderer(
 ): RendererBundle {
   const maxPixelRatio = options.maxPixelRatio ?? 2;
   const enableVignette = options.vignette !== false;
-  const bloomStrength = options.bloomStrength ?? 0.18;
+  const bloomStrength = options.bloomStrength ?? 0.55;
 
   const width = Math.max(1, container.clientWidth || window.innerWidth);
   const height = Math.max(1, container.clientHeight || window.innerHeight);
@@ -118,8 +118,8 @@ export function createRenderer(
   const bloomPass = new UnrealBloomPass(
     new THREE.Vector2(width, height),
     bloomStrength,
-    0.55,
-    0.82,
+    0.7,
+    0.62,
   );
   composer.addPass(bloomPass);
 

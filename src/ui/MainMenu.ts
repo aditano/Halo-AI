@@ -42,9 +42,10 @@ const MENU_CSS = `
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 90% 70% at 70% 20%, rgba(255, 154, 60, 0.22), transparent 55%),
-    radial-gradient(ellipse 70% 60% at 15% 80%, rgba(94, 234, 212, 0.18), transparent 50%),
-    linear-gradient(160deg, #02080c 0%, #0a1a22 45%, #061018 100%);
+    radial-gradient(ellipse 80% 55% at 50% 42%, rgba(6, 16, 22, 0.18), rgba(2, 8, 12, 0.55) 70%),
+    radial-gradient(ellipse 90% 70% at 70% 20%, rgba(255, 154, 60, 0.12), transparent 55%),
+    radial-gradient(ellipse 70% 60% at 15% 80%, rgba(94, 234, 212, 0.1), transparent 50%);
+  backdrop-filter: blur(1.5px);
 }
 .rf-menu-bg::before {
   content: "";

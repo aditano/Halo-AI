@@ -31,12 +31,13 @@ export function setupLighting(
   const enableShafts = options.lightShafts !== false;
 
   // Warm key — high sun angle, golden Forerunner afternoon.
-  const sun = new THREE.DirectionalLight(HaloPalette.warmSun, 2.35);
+  const sun = new THREE.DirectionalLight(HaloPalette.warmSun, 1.95);
   sun.position.set(48, 72, 28);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
   sun.shadow.bias = -0.00018;
   sun.shadow.normalBias = 0.035;
+  sun.shadow.radius = 3;
   const extent = arenaRadius * 1.15;
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = extent * 3;
@@ -64,7 +65,7 @@ export function setupLighting(
   scene.add(hemi);
 
   // Soft contact-ish ambient so shadowed cover stays readable for FPS play.
-  const ambient = new THREE.AmbientLight(0xc8dce4, 0.28);
+  const ambient = new THREE.AmbientLight(0xb8d8e8, 0.38);
   scene.add(ambient);
 
   const lightShafts = new THREE.Group();
@@ -76,23 +77,23 @@ export function setupLighting(
     const shaftMat = new THREE.MeshBasicMaterial({
       color: 0xffe6b8,
       transparent: true,
-      opacity: 0.045,
+      opacity: 0.08,
       depthWrite: false,
       side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
     });
 
-    for (let i = 0; i < 5; i++) {
-      const w = 4 + (i % 3) * 2.5;
-      const h = 55 + (i % 2) * 18;
+    for (let i = 0; i < 8; i++) {
+      const w = 3 + (i % 4) * 2.8;
+      const h = 50 + (i % 3) * 16;
       const geo = new THREE.PlaneGeometry(w, h);
       const mesh = new THREE.Mesh(geo, shaftMat.clone());
-      const angle = (i / 5) * Math.PI * 2 + 0.4;
-      const dist = 12 + i * 7;
+      const angle = (i / 8) * Math.PI * 2 + 0.35;
+      const dist = 10 + i * 5.5;
       mesh.position.set(Math.cos(angle) * dist, h * 0.35, Math.sin(angle) * dist);
       mesh.rotation.y = -angle + Math.PI * 0.5;
-      mesh.rotation.z = THREE.MathUtils.degToRad(12 + i * 3);
-      mesh.userData.driftSpeed = 0.04 + i * 0.01;
+      mesh.rotation.z = THREE.MathUtils.degToRad(10 + i * 2.5);
+      mesh.userData.driftSpeed = 0.035 + i * 0.008;
       mesh.userData.baseY = mesh.position.y;
       mesh.renderOrder = 1;
       lightShafts.add(mesh);
@@ -115,7 +116,7 @@ export function setupLighting(
         mesh.position.y = (mesh.userData.baseY as number) + Math.sin(elapsed * speed) * 1.2;
         mesh.rotation.z += deltaSeconds * speed * 0.15;
         const mat = mesh.material as THREE.MeshBasicMaterial;
-        mat.opacity = 0.035 + Math.sin(elapsed * speed * 1.5) * 0.015;
+        mat.opacity = 0.06 + Math.sin(elapsed * speed * 1.5) * 0.03;
       }
     },
     dispose() {

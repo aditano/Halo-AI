@@ -53,6 +53,73 @@ export type MaterialKind =
 
 const cache = new Map<string, THREE.Material>();
 
+function proceduralNoiseMap(size: number, min = 0.2, max = 0.8): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  const img = ctx.createImageData(size, size);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const v = Math.floor((min + Math.random() * (max - min)) * 255);
+    img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+    img.data[i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+function proceduralPanelMap(size: number, a: number, b: number): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  const ca = `#${a.toString(16).padStart(6, '0')}`;
+  const cb = `#${b.toString(16).padStart(6, '0')}`;
+  ctx.fillStyle = ca;
+  ctx.fillRect(0, 0, size, size);
+  const cell = size / 8;
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      ctx.fillStyle = (x + y) % 2 === 0 ? cb : ca;
+      ctx.globalAlpha = 0.35 + Math.random() * 0.25;
+      ctx.fillRect(x * cell + 2, y * cell + 2, cell - 4, cell - 4);
+      ctx.globalAlpha = 0.55;
+      ctx.strokeStyle = '#3de8ff';
+      ctx.lineWidth = 1;
+      if (Math.random() > 0.55) {
+        ctx.strokeRect(x * cell + 6, y * cell + 6, cell - 12, cell - 12);
+      }
+    }
+  }
+  ctx.globalAlpha = 1;
+  const tex = new THREE.CanvasTexture(c);
+  tex.anisotropy = 4;
+  return tex;
+}
+
+function proceduralGrassMap(size: number): THREE.CanvasTexture {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d')!;
+  ctx.fillStyle = '#3d6a32';
+  ctx.fillRect(0, 0, size, size);
+  for (let i = 0; i < 4000; i++) {
+    const x = Math.random() * size;
+    const y = Math.random() * size;
+    ctx.fillStyle = Math.random() > 0.5 ? '#5a8f45' : '#2f5528';
+    ctx.fillRect(x, y, 1 + Math.random() * 2, 2 + Math.random() * 3);
+  }
+  for (let i = 0; i < 200; i++) {
+    ctx.fillStyle = '#6b5a3e';
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    ctx.arc(Math.random() * size, Math.random() * size, 2 + Math.random() * 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  return new THREE.CanvasTexture(c);
+}
+
 function cacheKey(kind: string, opts?: Record<string, unknown>): string {
   return opts ? `${kind}:${JSON.stringify(opts)}` : kind;
 }
@@ -75,7 +142,13 @@ export function createForerunnerMetal(options?: {
     emissive: new THREE.Color(HaloPalette.forerunnerEmissive),
     emissiveIntensity: options?.emissiveIntensity ?? 0.18,
     envMapIntensity: 1.15,
+    map: proceduralPanelMap(256, 0x2a3238, 0x3a4550),
+    roughnessMap: proceduralNoiseMap(128, 0.25, 0.55),
   });
+  mat.map!.colorSpace = THREE.SRGBColorSpace;
+  mat.map!.wrapS = mat.map!.wrapT = THREE.RepeatWrapping;
+  mat.map!.repeat.set(2, 4);
+  mat.roughnessMap!.wrapS = mat.roughnessMap!.wrapT = THREE.RepeatWrapping;
   cache.set(key, mat);
   return mat;
 }
@@ -181,7 +254,11 @@ export function createTerrainGrass(options?: {
     roughness: 0.92,
     metalness: 0.02,
     envMapIntensity: 0.35,
+    map: proceduralGrassMap(256),
   });
+  mat.map!.colorSpace = THREE.SRGBColorSpace;
+  mat.map!.wrapS = mat.map!.wrapT = THREE.RepeatWrapping;
+  mat.map!.repeat.set(24, 24);
   cache.set(key, mat);
   return mat;
 }
@@ -320,7 +397,7 @@ export function enemyArmor(hue: 'purple' | 'red' | 'blue' = 'purple'): THREE.Mes
     metalness: 0.7,
     roughness: 0.35,
     emissive: new THREE.Color(map[hue]),
-    emissiveIntensity: 0.12,
+    emissiveIntensity: 0.28,
   });
 }
 
