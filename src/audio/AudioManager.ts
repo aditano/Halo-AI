@@ -1,12 +1,18 @@
 /**
  * Procedural Web Audio SFX — no external files.
  * Layered oscillators + filtered noise with envelopes.
+ * Supports positional (HRTF) playback for world-space events.
  */
+
+import { MusicDirector, type MusicMode } from './MusicDirector'
 
 export interface AudioManagerOptions {
   masterVolume?: number
   sfxVolume?: number
+  musicVolume?: number
 }
+
+export type Vec3Like = { x: number; y: number; z: number }
 
 type NoiseKind = 'white' | 'brown'
 
@@ -20,10 +26,12 @@ export class AudioManager {
   private footFlip = false
   private charge: { osc: OscillatorNode; gain: GainNode; lfo: OscillatorNode } | null = null
   private readonly unlockHandler: () => void
+  readonly music: MusicDirector
 
   constructor(options: AudioManagerOptions = {}) {
     this.masterVolume = options.masterVolume ?? 0.85
     this.sfxVolume = options.sfxVolume ?? 0.9
+    this.music = new MusicDirector(() => this.ensure())
     this.unlockHandler = () => {
       void this.resume()
     }
@@ -35,6 +43,7 @@ export class AudioManager {
     const ctx = this.ensure()
     if (ctx.state === 'suspended') await ctx.resume()
     this.unlocked = ctx.state === 'running'
+    if (this.unlocked && this.master) this.music.attach(this.master)
   }
 
   isUnlocked(): boolean {
@@ -51,7 +60,50 @@ export class AudioManager {
     if (this.sfxBus) this.sfxBus.gain.value = this.sfxVolume
   }
 
-  // —— Named game hooks (Game / WeaponSystem / EnemyManager) ——
+  setMusicMode(mode: MusicMode): void {
+    void this.resume()
+    this.music.setMode(mode)
+  }
+
+  setMusicIntensity(v: number): void {
+    this.music.setIntensity(v)
+  }
+
+  updateMusic(dt: number): void {
+    this.music.update(dt)
+  }
+
+  /** Sync Web Audio listener to the player camera for HRTF positional SFX. */
+  setListener(position: Vec3Like, forward: Vec3Like, up: Vec3Like = { x: 0, y: 1, z: 0 }): void {
+    const ctx = this.ctx
+    if (!ctx) return
+    const l = ctx.listener
+    if (l.positionX) {
+      l.positionX.value = position.x
+      l.positionY.value = position.y
+      l.positionZ.value = position.z
+      l.forwardX.value = forward.x
+      l.forwardY.value = forward.y
+      l.forwardZ.value = forward.z
+      l.upX.value = up.x
+      l.upY.value = up.y
+      l.upZ.value = up.z
+    } else {
+      const legacy = l as AudioListener & {
+        setPosition: (x: number, y: number, z: number) => void
+        setOrientation: (
+          fx: number,
+          fy: number,
+          fz: number,
+          ux: number,
+          uy: number,
+          uz: number,
+        ) => void
+      }
+      legacy.setPosition?.(position.x, position.y, position.z)
+      legacy.setOrientation?.(forward.x, forward.y, forward.z, up.x, up.y, up.z)
+    }
+  }
 
   ui(): void {
     this.blip(720, 0.06, 0.22)
@@ -125,73 +177,43 @@ export class AudioManager {
     osc.stop(t0 + 0.42)
   }
 
-  shieldRecharge(): void {
-    const ctx = this.ensure()
-    const t0 = ctx.currentTime
-    const osc = ctx.createOscillator()
-    osc.type = 'sine'
-    osc.frequency.setValueAtTime(300, t0)
-    osc.frequency.linearRampToValueAtTime(900, t0 + 0.45)
-    const g = ctx.createGain()
-    g.gain.setValueAtTime(0.001, t0)
-    g.gain.linearRampToValueAtTime(0.18, t0 + 0.05)
-    g.gain.linearRampToValueAtTime(0.001, t0 + 0.5)
-    osc.connect(g)
-    g.connect(this.bus())
-    osc.start(t0)
-    osc.stop(t0 + 0.52)
-  }
-
   footstep(sprint = false): void {
+    this.footFlip = !this.footFlip
     const ctx = this.ensure()
     const t0 = ctx.currentTime
-    this.footFlip = !this.footFlip
-    const noise = this.noise(0.08, 'brown')
+    const noise = this.noise(0.06, 'brown')
     const f = ctx.createBiquadFilter()
-    f.type = 'bandpass'
-    f.frequency.value = (this.footFlip ? 180 : 230) * (sprint ? 1.15 : 1)
-    f.Q.value = 1.2
+    f.type = 'lowpass'
+    f.frequency.value = sprint ? 500 : 350
     const g = ctx.createGain()
-    g.gain.setValueAtTime(sprint ? 0.34 : 0.26, t0)
+    g.gain.setValueAtTime(sprint ? 0.22 : 0.14, t0)
     g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.07)
     noise.connect(f)
     f.connect(g)
     g.connect(this.bus())
     noise.start(t0)
-    noise.stop(t0 + 0.09)
+    noise.stop(t0 + 0.08)
   }
 
   jump(): void {
-    const ctx = this.ensure()
-    const t0 = ctx.currentTime
-    const osc = ctx.createOscillator()
-    osc.type = 'sine'
-    osc.frequency.setValueAtTime(140, t0)
-    osc.frequency.exponentialRampToValueAtTime(280, t0 + 0.1)
-    const g = ctx.createGain()
-    g.gain.setValueAtTime(0.22, t0)
-    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12)
-    osc.connect(g)
-    g.connect(this.bus())
-    osc.start(t0)
-    osc.stop(t0 + 0.14)
+    this.blip(180, 0.06, 0.12)
   }
 
   land(): void {
     const ctx = this.ensure()
     const t0 = ctx.currentTime
-    const noise = this.noise(0.15, 'brown')
+    const noise = this.noise(0.1, 'brown')
     const f = ctx.createBiquadFilter()
     f.type = 'lowpass'
     f.frequency.value = 280
     const g = ctx.createGain()
-    g.gain.setValueAtTime(0.42, t0)
-    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.14)
+    g.gain.setValueAtTime(0.3, t0)
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.12)
     noise.connect(f)
     f.connect(g)
     g.connect(this.bus())
     noise.start(t0)
-    noise.stop(t0 + 0.16)
+    noise.stop(t0 + 0.12)
   }
 
   enemyDeath(): void {
@@ -200,132 +222,165 @@ export class AudioManager {
     const osc = ctx.createOscillator()
     osc.type = 'sawtooth'
     osc.frequency.setValueAtTime(220, t0)
-    osc.frequency.exponentialRampToValueAtTime(55, t0 + 0.35)
+    osc.frequency.exponentialRampToValueAtTime(50, t0 + 0.28)
     const g = ctx.createGain()
-    g.gain.setValueAtTime(0.28, t0)
-    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.35)
-    const f = ctx.createBiquadFilter()
-    f.type = 'lowpass'
-    f.frequency.value = 900
-    osc.connect(f)
-    f.connect(g)
+    g.gain.setValueAtTime(0.2, t0)
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3)
+    osc.connect(g)
     g.connect(this.bus())
     osc.start(t0)
-    osc.stop(t0 + 0.38)
+    osc.stop(t0 + 0.32)
+  }
 
-    const noise = this.noise(0.25, 'white')
-    const ng = ctx.createGain()
-    ng.gain.setValueAtTime(0.2, t0)
-    ng.gain.exponentialRampToValueAtTime(0.001, t0 + 0.25)
-    const nf = ctx.createBiquadFilter()
-    nf.type = 'bandpass'
-    nf.frequency.value = 400
-    noise.connect(nf)
-    nf.connect(ng)
-    ng.connect(this.bus())
-    noise.start(t0)
-    noise.stop(t0 + 0.25)
+  enemyDeathAt(pos: Vec3Like): void {
+    this.playPositional(
+      pos,
+      (dest) => {
+        const ctx = this.ensure()
+        const t0 = ctx.currentTime
+        const osc = ctx.createOscillator()
+        osc.type = 'sawtooth'
+        osc.frequency.setValueAtTime(220, t0)
+        osc.frequency.exponentialRampToValueAtTime(50, t0 + 0.28)
+        const g = ctx.createGain()
+        g.gain.setValueAtTime(0.28, t0)
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3)
+        osc.connect(g)
+        g.connect(dest)
+        osc.start(t0)
+        osc.stop(t0 + 0.32)
+        const noise = this.noise(0.2, 'white')
+        const nf = ctx.createBiquadFilter()
+        nf.type = 'bandpass'
+        nf.frequency.value = 500
+        const ng = ctx.createGain()
+        ng.gain.setValueAtTime(0.2, t0)
+        ng.gain.exponentialRampToValueAtTime(0.001, t0 + 0.2)
+        noise.connect(nf)
+        nf.connect(ng)
+        ng.connect(dest)
+        noise.start(t0)
+        noise.stop(t0 + 0.22)
+      },
+      28,
+    )
+  }
+
+  plasmaFireAt(pos: Vec3Like): void {
+    this.playPositional(
+      pos,
+      (dest) => {
+        const ctx = this.ensure()
+        const t0 = ctx.currentTime
+        const osc = ctx.createOscillator()
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(880, t0)
+        osc.frequency.exponentialRampToValueAtTime(220, t0 + 0.15)
+        const g = ctx.createGain()
+        g.gain.setValueAtTime(0.22, t0)
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.16)
+        osc.connect(g)
+        g.connect(dest)
+        osc.start(t0)
+        osc.stop(t0 + 0.18)
+      },
+      40,
+    )
+  }
+
+  explosionAt(pos: Vec3Like): void {
+    this.playPositional(
+      pos,
+      (dest) => {
+        const ctx = this.ensure()
+        const t0 = ctx.currentTime
+        const noise = this.noise(0.4, 'white')
+        const f = ctx.createBiquadFilter()
+        f.type = 'lowpass'
+        f.frequency.setValueAtTime(2000, t0)
+        f.frequency.exponentialRampToValueAtTime(120, t0 + 0.35)
+        const g = ctx.createGain()
+        g.gain.setValueAtTime(0.55, t0)
+        g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.4)
+        noise.connect(f)
+        f.connect(g)
+        g.connect(dest)
+        noise.start(t0)
+        noise.stop(t0 + 0.42)
+      },
+      55,
+    )
   }
 
   reload(): void {
-    this.click(0.28, undefined, 900)
-    this.click(0.22, this.ensure().currentTime + 0.35, 220)
-    this.click(0.32, this.ensure().currentTime + 0.7, 500)
+    this.click(0.25, undefined, 700)
+    this.click(0.2, this.ensure().currentTime + 0.12, 1100)
   }
 
   empty(): void {
-    this.click(0.3, undefined, 700)
+    this.click(0.2, undefined, 400)
   }
 
   weaponSwap(): void {
-    this.click(0.28, undefined, 600)
-    this.click(0.22, this.ensure().currentTime + 0.08, 1100)
+    this.click(0.18, undefined, 600)
+    this.blip(320, 0.05, 0.08, 0.04)
   }
 
-  /** BR 3-round burst crack — metallic + body thump. */
   brFire(): void {
     this.gunshot({
       noiseDur: 0.07,
       noiseFreq: 1800,
-      bodyFreq: 95,
-      gain: 0.52,
+      bodyFreq: 90,
+      gain: 0.5,
       metallic: true,
-      toneFreq: 240,
+      toneFreq: 220,
     })
   }
 
-  /** AR automatic chatter. */
   arFire(): void {
     this.gunshot({
       noiseDur: 0.05,
       noiseFreq: 2400,
-      bodyFreq: 78,
-      gain: 0.4,
+      bodyFreq: 75,
+      gain: 0.38,
       metallic: false,
       toneFreq: 160,
     })
   }
 
   plasmaFire(overcharge = false): void {
-    if (overcharge) this.stopCharge()
-    const ctx = this.ensure()
-    const t0 = ctx.currentTime
-    const dur = overcharge ? 0.35 : 0.18
-    const f0 = overcharge ? 140 : 220
-
-    const osc = ctx.createOscillator()
-    osc.type = 'sawtooth'
-    osc.frequency.setValueAtTime(f0, t0)
-    osc.frequency.exponentialRampToValueAtTime(f0 * (overcharge ? 0.35 : 0.55), t0 + dur)
-
-    const osc2 = ctx.createOscillator()
-    osc2.type = 'sine'
-    osc2.frequency.setValueAtTime(f0 * 2.1, t0)
-    osc2.frequency.exponentialRampToValueAtTime(f0 * 0.8, t0 + dur)
-
-    const filter = ctx.createBiquadFilter()
-    filter.type = 'lowpass'
-    filter.frequency.setValueAtTime(overcharge ? 2400 : 1800, t0)
-    filter.frequency.exponentialRampToValueAtTime(400, t0 + dur)
-    filter.Q.value = 6
-
-    const g = ctx.createGain()
-    g.gain.setValueAtTime(0.001, t0)
-    g.gain.exponentialRampToValueAtTime(overcharge ? 0.7 : 0.4, t0 + 0.015)
-    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur)
-
-    osc.connect(filter)
-    osc2.connect(filter)
-    filter.connect(g)
-    g.connect(this.bus())
-    osc.start(t0)
-    osc2.start(t0)
-    osc.stop(t0 + dur + 0.02)
-    osc2.stop(t0 + dur + 0.02)
-  }
-
-  startPlasmaCharge(): void {
-    this.stopCharge()
     const ctx = this.ensure()
     const t0 = ctx.currentTime
     const osc = ctx.createOscillator()
     osc.type = 'sine'
-    osc.frequency.setValueAtTime(180, t0)
-    osc.frequency.linearRampToValueAtTime(620, t0 + 1.35)
+    osc.frequency.setValueAtTime(overcharge ? 420 : 660, t0)
+    osc.frequency.exponentialRampToValueAtTime(overcharge ? 80 : 200, t0 + (overcharge ? 0.25 : 0.12))
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(overcharge ? 0.4 : 0.22, t0)
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + (overcharge ? 0.28 : 0.14))
+    osc.connect(g)
+    g.connect(this.bus())
+    osc.start(t0)
+    osc.stop(t0 + 0.3)
+  }
 
+  startPlasmaCharge(): void {
+    if (this.charge) return
+    const ctx = this.ensure()
+    const t0 = ctx.currentTime
+    const osc = ctx.createOscillator()
+    osc.type = 'sawtooth'
+    osc.frequency.setValueAtTime(120, t0)
+    osc.frequency.linearRampToValueAtTime(480, t0 + 1.4)
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0.001, t0)
+    g.gain.linearRampToValueAtTime(0.18, t0 + 1.2)
     const lfo = ctx.createOscillator()
-    lfo.type = 'sine'
     lfo.frequency.value = 8
     const lfoGain = ctx.createGain()
     lfoGain.gain.value = 12
     lfo.connect(lfoGain)
     lfoGain.connect(osc.frequency)
-
-    const g = ctx.createGain()
-    g.gain.setValueAtTime(0.001, t0)
-    g.gain.linearRampToValueAtTime(0.18, t0 + 0.2)
-    g.gain.linearRampToValueAtTime(0.32, t0 + 1.3)
-
     osc.connect(g)
     g.connect(this.bus())
     osc.start(t0)
@@ -357,6 +412,7 @@ export class AudioManager {
 
   dispose(): void {
     this.stopCharge()
+    this.music.dispose()
     document.removeEventListener('pointerdown', this.unlockHandler)
     document.removeEventListener('keydown', this.unlockHandler)
     void this.ctx?.close()
@@ -365,9 +421,45 @@ export class AudioManager {
     this.sfxBus = null
   }
 
+  private playPositional(
+    pos: Vec3Like,
+    build: (dest: AudioNode) => void,
+    maxDistance = 45,
+  ): void {
+    const ctx = this.ensure()
+    const panner = ctx.createPanner()
+    panner.panningModel = 'HRTF'
+    panner.distanceModel = 'inverse'
+    panner.refDistance = 2
+    panner.maxDistance = maxDistance
+    panner.rolloffFactor = 1.2
+    if (panner.positionX) {
+      panner.positionX.value = pos.x
+      panner.positionY.value = pos.y
+      panner.positionZ.value = pos.z
+    } else {
+      ;(panner as PannerNode & { setPosition: (x: number, y: number, z: number) => void }).setPosition?.(
+        pos.x,
+        pos.y,
+        pos.z,
+      )
+    }
+    panner.connect(this.bus())
+    build(panner)
+    setTimeout(() => {
+      try {
+        panner.disconnect()
+      } catch {
+        /* ignore */
+      }
+    }, 800)
+  }
+
   private ensure(): AudioContext {
     if (this.ctx) return this.ctx
-    const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+    const Ctx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
     this.ctx = new Ctx()
     this.master = this.ctx.createGain()
     this.master.gain.value = this.masterVolume
@@ -375,6 +467,7 @@ export class AudioManager {
     this.sfxBus.gain.value = this.sfxVolume
     this.sfxBus.connect(this.master)
     this.master.connect(this.ctx.destination)
+    this.music.attach(this.master)
     return this.ctx
   }
 

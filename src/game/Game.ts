@@ -12,6 +12,7 @@ import { EffectsManager } from '../vfx/EffectsManager'
 import { EnemyManager } from '../enemies/EnemyManager'
 import { HUD } from '../ui/HUD'
 import { MainMenu } from '../ui/MainMenu'
+import { HaloCEMenuWorld } from '../ui/HaloCEMenuWorld'
 
 export class Game {
   private running = false
@@ -20,6 +21,7 @@ export class Game {
   private readonly renderer
   private readonly sky
   private readonly lighting
+  private readonly envRoot: THREE.Group
   private readonly player: PlayerController
   private readonly audio = new AudioManager()
   private readonly damage = new DamageSystem()
@@ -29,9 +31,10 @@ export class Game {
   private readonly weapons: WeaponSystem
   private readonly hud: HUD
   private readonly menu: MainMenu
+  private readonly ceMenu: HaloCEMenuWorld
   private statusEl: HTMLElement | null = null
-  private menuCamT = 0
-  private readonly menuCamTarget = new THREE.Vector3(0, 4, 0)
+  private readonly lookDir = new THREE.Vector3()
+  private menuMusicStarted = false
 
   constructor(container: HTMLElement) {
     this.renderer = createRenderer(container)
@@ -39,6 +42,7 @@ export class Game {
     this.lighting = setupLighting(this.renderer.scene)
 
     const env = buildEnvironment(this.renderer.scene)
+    this.envRoot = env.root
     this.player = new PlayerController(this.renderer.camera, this.renderer.renderer.domElement)
     this.player.setColliders(env.colliders)
     if (env.spawnPoints[0]) {
@@ -66,17 +70,26 @@ export class Game {
         const killed = this.enemies.damageEnemy(id, dmg, point, head)
         this.audio.hitmarker()
         this.hud.flashHitmarker(head)
-        if (killed) this.hud.pushKillFeed(head ? 'HEADSHOT' : 'HOSTILE', this.weapons.def.name)
+        if (killed) {
+          this.audio.enemyDeathAt(point)
+          this.hud.pushKillFeed(head ? 'HEADSHOT' : 'HOSTILE', this.weapons.def.name)
+          this.audio.setMusicIntensity(Math.min(1, this.audioIntensity() + 0.15))
+        }
       },
     )
 
+    this.ceMenu = new HaloCEMenuWorld(this.renderer.scene)
     this.hud = new HUD({ parent: container })
     this.menu = new MainMenu({
       parent: container,
+      title: 'RINGFALL',
+      subtitle: 'Combat Evolved · Infinite Protocols',
       onPlay: () => this.start(),
       requestPointerLockTarget: this.renderer.renderer.domElement,
     })
     this.statusEl = this.menu.root.querySelector('.rf-menu-sub') as HTMLElement | null
+
+    this.enterMenuWorld()
 
     this.damage.onDamage((e) => {
       if (e.toShield > 0) this.audio.shieldHit()
@@ -89,18 +102,62 @@ export class Game {
       if (e.shieldBroken) {
         this.effects.spawnShieldRipple(this.player.position.clone())
       }
+      this.audio.setMusicIntensity(Math.min(1, this.audioIntensity() + 0.35))
+      this.audio.setMusicMode('combat')
     })
 
     this.bindInput()
+    // Kick Gregorian menu bed on first gesture
+    const kickMusic = () => {
+      if (this.menuMusicStarted) return
+      this.menuMusicStarted = true
+      void this.audio.resume().then(() => this.audio.setMusicMode('menu'))
+    }
+    window.addEventListener('pointerdown', kickMusic, { once: true })
+    window.addEventListener('keydown', kickMusic, { once: true })
+
     this.player.onPointerUnlock(() => {
       if (this.running && this.damage.alive) {
+        this.enterMenuWorld()
         this.menu.show()
         this.hud.hide()
+        this.audio.setMusicMode('menu')
       }
     })
 
     this.last = performance.now()
     requestAnimationFrame((t) => this.frame(t))
+  }
+
+  private enterMenuWorld() {
+    this.ceMenu.show()
+    this.envRoot.visible = false
+    this.sky.sky.visible = false
+    this.lighting.lightShafts.visible = false
+    this.weapons.group.visible = false
+    this.renderer.setBloom(0.85)
+  }
+
+  private enterGameplayWorld() {
+    this.ceMenu.hide()
+    this.envRoot.visible = true
+    this.sky.sky.visible = true
+    this.lighting.lightShafts.visible = true
+    this.weapons.group.visible = true
+    this.renderer.setBloom(0.45)
+    this.renderer.camera.fov = 75
+    this.renderer.camera.updateProjectionMatrix()
+  }
+
+  private audioIntensity(): number {
+    const alive = this.enemies.enemies.filter((e) => e.alive)
+    if (alive.length === 0) return 0
+    let nearest = Infinity
+    for (const e of alive) {
+      nearest = Math.min(nearest, e.group.position.distanceTo(this.player.position))
+    }
+    const proximity = THREE.MathUtils.clamp(1 - nearest / 35, 0, 1)
+    return THREE.MathUtils.clamp(alive.length / 10 + proximity * 0.5, 0, 1)
   }
 
   private bindInput() {
@@ -140,10 +197,11 @@ export class Game {
     this.damage.reset()
     this.menu.hide()
     this.hud.show()
+    this.enterGameplayWorld()
+    this.audio.setMusicMode('explore')
+    this.audio.setMusicIntensity(0.15)
     this.hud.showBanner(`WAVE ${Math.max(1, this.enemies.waveNumber || 1)}`)
-    this.weapons.group.visible = true
     this.player.lock()
-    // Snap camera out of menu orbit into player eyes.
     this.renderer.camera.position.copy(this.player.position)
     this.renderer.camera.rotation.set(0, 0, 0)
     if (this.enemies.enemies.filter((e) => e.alive).length === 0) {
@@ -174,28 +232,21 @@ export class Game {
     const dt = Math.min(0.05, (now - this.last) / 1000)
     this.last = now
 
-    this.lighting.update(dt)
-    this.sky.update(this.renderer.camera)
+    this.audio.updateMusic(dt)
 
-    // Cinematic orbit while on menu so the live arena reads as the backdrop.
-    if (!this.running || !this.player.locked) {
-      this.weapons.group.visible = false
-      this.menuCamT += dt * 0.12
-      const r = 28
-      this.renderer.camera.position.set(
-        Math.cos(this.menuCamT) * r,
-        8 + Math.sin(this.menuCamT * 0.7) * 1.5,
-        Math.sin(this.menuCamT) * r,
-      )
-      this.renderer.camera.lookAt(this.menuCamTarget)
-      this.renderer.setBloom(0.7)
+    const onMenu = !this.running || !this.player.locked || this.menu.isVisible
+    if (onMenu) {
+      this.ceMenu.updateCamera(this.renderer.camera, dt)
     } else {
-      this.weapons.group.visible = true
-      this.renderer.setBloom(0.45)
+      this.lighting.update(dt)
+      this.sky.update(this.renderer.camera)
     }
 
     if (this.running && this.player.locked && this.damage.alive) {
       this.player.update(dt)
+      this.player.getLookDirection(this.lookDir)
+      this.audio.setListener(this.player.position, this.lookDir)
+
       const moving =
         this.player.keys.forward ||
         this.player.keys.back ||
@@ -211,6 +262,11 @@ export class Game {
       this.hud.update(dt)
       this.syncHud()
 
+      const heat = this.audioIntensity()
+      this.audio.setMusicIntensity(heat)
+      if (heat > 0.35) this.audio.setMusicMode('combat')
+      else if (heat < 0.15) this.audio.setMusicMode('explore')
+
       if (moving && this.player.grounded) {
         this.footT += dt * (this.player.keys.sprint ? 2.2 : 1.6)
         if (this.footT > 1) {
@@ -225,7 +281,9 @@ export class Game {
     if (!this.damage.alive && this.running) {
       this.running = false
       this.hud.hide()
+      this.enterMenuWorld()
       this.menu.show()
+      this.audio.setMusicMode('menu')
       if (this.statusEl) {
         this.statusEl.textContent = `KIA — ${this.enemies.kills} eliminations. Deploy again.`
       }
@@ -249,7 +307,7 @@ export class Game {
             this.hud.flashHitmarker(false)
             if (killed) {
               this.enemies.kills++
-              this.audio.enemyDeath()
+              this.audio.enemyDeathAt(e.group.position)
               this.hud.pushKillFeed('HOSTILE', 'Plasma')
             }
             p.alive = false
@@ -259,6 +317,7 @@ export class Game {
         }
       } else if (p.mesh.position.distanceTo(playerPos) < 1.2) {
         this.damage.applyDamage(p.damage, p.mesh.position.clone())
+        this.audio.plasmaFireAt(p.mesh.position)
         p.alive = false
         this.effects.spawnPlasmaImpact(p.mesh.position.clone(), new THREE.Vector3(0, 1, 0))
       }
