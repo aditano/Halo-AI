@@ -21,8 +21,13 @@ export type WeaponDef = {
   burst?: number
   burstGap?: number
   hitscan: boolean
+  /** Hold-to-charge plasma overcharge. */
+  chargeable?: boolean
+  chargeTime?: number
   projectileSpeed?: number
   adsFov: number
+  hipFov: number
+  muzzleColor: number
 }
 
 const DEFS: Record<WeaponId, WeaponDef> = {
@@ -32,60 +37,76 @@ const DEFS: Record<WeaponId, WeaponDef> = {
     magSize: 36,
     reserve: 144,
     fireRate: 6.5,
-    damage: 22,
+    damage: 14,
     bloomPerShot: 0.012,
     bloomDecay: 4.5,
     maxBloom: 0.08,
-    recoil: 0.018,
-    reloadTime: 1.7,
+    recoil: 0.014,
+    reloadTime: 2.05,
     burst: 3,
-    burstGap: 0.055,
+    burstGap: 0.048,
     hitscan: true,
     adsFov: 52,
+    hipFov: 75,
+    muzzleColor: 0xffc48a,
   },
   ar: {
     id: 'ar',
-    name: 'MA40',
-    magSize: 36,
-    reserve: 216,
-    fireRate: 11,
-    damage: 12,
-    bloomPerShot: 0.018,
-    bloomDecay: 5,
-    maxBloom: 0.12,
-    recoil: 0.012,
-    reloadTime: 2.0,
+    name: 'MA40 AR',
+    magSize: 32,
+    reserve: 192,
+    fireRate: 12.5,
+    damage: 9,
+    bloomPerShot: 0.009,
+    bloomDecay: 5.2,
+    maxBloom: 0.11,
+    recoil: 0.01,
+    reloadTime: 2.25,
     hitscan: true,
     adsFov: 58,
+    hipFov: 75,
+    muzzleColor: 0xffb36a,
   },
   plasma: {
     id: 'plasma',
     name: 'Plasma Pistol',
     magSize: 100,
     reserve: 0,
-    fireRate: 4.5,
-    damage: 20,
+    fireRate: 4.2,
+    damage: 16,
     bloomPerShot: 0.01,
-    bloomDecay: 3,
+    bloomDecay: 3.5,
     maxBloom: 0.06,
-    recoil: 0.01,
-    reloadTime: 1.4,
+    recoil: 0.009,
+    reloadTime: 1.45,
     hitscan: false,
-    projectileSpeed: 55,
+    chargeable: true,
+    chargeTime: 1.35,
+    projectileSpeed: 48,
     adsFov: 60,
+    hipFov: 75,
+    muzzleColor: 0x5dffb0,
   },
 }
 
+/**
+ * Dual-wield-capable weapon manager: BR 3-round burst, AR auto, chargeable plasma.
+ * Hitscan + projectile hybrid with bloom, recoil, ADS FOV lerp, muzzle flash,
+ * sway/bob, and procedural Halo-ish viewmodels.
+ */
 export class WeaponSystem {
   current: WeaponId = 'br'
-  ammo: Record<WeaponId, { mag: number; reserve: number }> = {
-    br: { mag: 36, reserve: 144 },
-    ar: { mag: 36, reserve: 216 },
-    plasma: { mag: 100, reserve: 0 },
-  }
-
   ads = false
   bloom = 0
+
+  ammo: Record<WeaponId, { mag: number; reserve: number }> = {
+    br: { mag: DEFS.br.magSize, reserve: DEFS.br.reserve },
+    ar: { mag: DEFS.ar.magSize, reserve: DEFS.ar.reserve },
+    plasma: { mag: DEFS.plasma.magSize, reserve: 0 },
+  }
+
+  readonly group = new THREE.Group()
+
   private fireCooldown = 0
   private reloading = false
   private reloadT = 0
@@ -93,22 +114,31 @@ export class WeaponSystem {
   private burstTimer = 0
   private muzzleFlash = 0
   private swayT = 0
+  private bobT = 0
   private recoilPitch = 0
+  private recoilYaw = 0
   private firing = false
+  private adsAmount = 0
+  private charging = false
+  private charge = 0
+  private triggerLatched = false
 
-  readonly group = new THREE.Group()
-  private models: Record<WeaponId, THREE.Group>
-  private muzzleLight: THREE.PointLight
+  private readonly models: Record<WeaponId, THREE.Group>
+  private readonly muzzleLight: THREE.PointLight
   private readonly raycaster = new THREE.Raycaster()
   private readonly aim = new THREE.Vector3()
   private readonly spreadDir = new THREE.Vector3()
+  private readonly right = new THREE.Vector3()
+  private readonly up = new THREE.Vector3()
+  private readonly worldUp = new THREE.Vector3(0, 1, 0)
+  private readonly muzzleLocal = new THREE.Vector3(0.02, 0.02, -0.85)
 
-  private camera: THREE.PerspectiveCamera
-  private audio: AudioManager
-  private projectiles: ProjectileManager
-  private effects: EffectsManager
-  private getEnemyMeshes: () => THREE.Object3D[]
-  private onHitEnemy: (id: string, damage: number, point: THREE.Vector3, headshot: boolean) => void
+  private readonly camera: THREE.PerspectiveCamera
+  private readonly audio: AudioManager
+  private readonly projectiles: ProjectileManager
+  private readonly effects: EffectsManager
+  private readonly getEnemyMeshes: () => THREE.Object3D[]
+  private readonly onHitEnemy: (id: string, damage: number, point: THREE.Vector3, headshot: boolean) => void
 
   constructor(
     camera: THREE.PerspectiveCamera,
@@ -126,121 +156,174 @@ export class WeaponSystem {
     this.onHitEnemy = onHitEnemy
 
     this.models = {
-      br: this.buildBR(),
-      ar: this.buildAR(),
-      plasma: this.buildPlasma(),
+      br: buildBR(),
+      ar: buildAR(),
+      plasma: buildPlasma(),
     }
     for (const m of Object.values(this.models)) {
       m.visible = false
       this.group.add(m)
     }
     this.models.br.visible = true
-    this.muzzleLight = new THREE.PointLight(0xffcc88, 0, 8)
-    this.muzzleLight.position.set(0.15, -0.05, -0.9)
+
+    this.muzzleLight = new THREE.PointLight(0xffcc88, 0, 8, 2)
+    this.muzzleLight.position.copy(this.muzzleLocal)
     this.group.add(this.muzzleLight)
+
     camera.add(this.group)
-    this.group.position.set(0.28, -0.28, -0.45)
+    this.group.position.set(0.28, -0.26, -0.45)
+    camera.fov = DEFS.br.hipFov
+    camera.updateProjectionMatrix()
   }
 
   get def(): WeaponDef {
     return DEFS[this.current]
   }
 
-  get ammoState() {
+  get ammoState(): { mag: number; reserve: number } {
     return this.ammo[this.current]
   }
 
-  switchWeapon(id: WeaponId) {
-    if (this.reloading) return
+  get chargeAmount(): number {
+    return this.charge
+  }
+
+  get isReloading(): boolean {
+    return this.reloading
+  }
+
+  switchWeapon(id: WeaponId): void {
+    if (id === this.current) return
+    this.cancelFireState()
+    this.reloading = false
     this.current = id
-    this.burstLeft = 0
     for (const [k, m] of Object.entries(this.models)) m.visible = k === id
     this.audio.weaponSwap()
+    this.bloom = Math.min(this.bloom, DEFS[id].maxBloom * 0.25)
   }
 
-  cycleWeapon(dir: 1 | -1) {
+  cycleWeapon(dir: 1 | -1): void {
     const order: WeaponId[] = ['br', 'ar', 'plasma']
     const i = order.indexOf(this.current)
-    this.switchWeapon(order[(i + dir + order.length) % order.length])
+    this.switchWeapon(order[(i + dir + order.length) % order.length]!)
   }
 
-  startReload() {
+  startReload(): void {
     const a = this.ammo[this.current]
     const def = this.def
     if (this.reloading || a.mag >= def.magSize) return
     if (this.current !== 'plasma' && a.reserve <= 0) return
+    this.cancelFireState()
     this.reloading = true
     this.reloadT = def.reloadTime
-    this.burstLeft = 0
     this.audio.reload()
   }
 
-  setFiring(down: boolean) {
-    if (down && this.def.burst && this.fireCooldown <= 0 && !this.reloading) {
+  setFiring(down: boolean): void {
+    if (down && !this.firing) this.triggerLatched = false
+    if (!down) this.releaseCharge()
+    this.firing = down
+
+    if (down && this.def.burst && this.fireCooldown <= 0 && !this.reloading && !this.triggerLatched) {
+      this.triggerLatched = true
       this.burstLeft = this.def.burst
       this.burstTimer = 0
     }
-    this.firing = down
   }
 
-  setAds(down: boolean) {
+  setAds(down: boolean): void {
     this.ads = down
   }
 
-  update(dt: number, moving: boolean, grounded: boolean) {
-    this.fireCooldown = Math.max(0, this.fireCooldown - dt)
-    this.bloom = Math.max(0, this.bloom - this.def.bloomDecay * dt * Math.max(this.bloom, 0.001))
-    this.muzzleFlash = Math.max(0, this.muzzleFlash - dt * 12)
-    this.muzzleLight.intensity = this.muzzleFlash * 4
-    this.recoilPitch = THREE.MathUtils.damp(this.recoilPitch, 0, 10, dt)
+  update(dt: number, moving: boolean, grounded: boolean): void {
+    const def = this.def
+    const clamped = Math.min(dt, 0.05)
+
+    this.fireCooldown = Math.max(0, this.fireCooldown - clamped)
+    this.bloom = Math.max(0, this.bloom - def.bloomDecay * clamped * Math.max(this.bloom, 0.002))
+    this.muzzleFlash = Math.max(0, this.muzzleFlash - clamped * 16)
+    this.muzzleLight.intensity = this.muzzleFlash * 8
+    this.recoilPitch = THREE.MathUtils.damp(this.recoilPitch, 0, 10, clamped)
+    this.recoilYaw = THREE.MathUtils.damp(this.recoilYaw, 0, 10, clamped)
+
+    const adsTarget = this.ads && !this.reloading ? 1 : 0
+    this.adsAmount = THREE.MathUtils.damp(this.adsAmount, adsTarget, 12, clamped)
+    const fov = THREE.MathUtils.lerp(def.hipFov, def.adsFov, this.adsAmount)
+    if (Math.abs(this.camera.fov - fov) > 0.04) {
+      this.camera.fov = fov
+      this.camera.updateProjectionMatrix()
+    }
 
     if (this.reloading) {
-      this.reloadT -= dt
+      this.reloadT -= clamped
       if (this.reloadT <= 0) this.finishReload()
+    } else {
+      this.handleFire(clamped, def)
     }
 
-    if (!this.reloading) {
-      if (this.def.burst) {
-        if (this.burstLeft > 0) {
-          this.burstTimer -= dt
-          if (this.burstTimer <= 0) {
-            this.fireOnce()
-            this.burstLeft--
-            this.burstTimer = this.def.burstGap ?? 0.05
-            if (this.burstLeft === 0) this.fireCooldown = 1 / this.def.fireRate
-          }
+    // Passive plasma heat recovery when not firing/charging.
+    if (this.current === 'plasma' && !this.firing && !this.charging && !this.reloading) {
+      this.ammo.plasma.mag = Math.min(100, this.ammo.plasma.mag + 22 * clamped)
+    }
+
+    this.updateViewModel(clamped, moving, grounded)
+  }
+
+  private handleFire(dt: number, def: WeaponDef): void {
+    if (def.chargeable) {
+      if (this.firing) {
+        if (!this.charging) {
+          this.charging = true
+          this.audio.startPlasmaCharge()
         }
-      } else if (this.firing && this.fireCooldown <= 0) {
-        this.fireOnce()
-        this.fireCooldown = 1 / this.def.fireRate
+        this.charge = Math.min(1, this.charge + dt / (def.chargeTime ?? 1.3))
+        const core = this.models.plasma.getObjectByName('plasmaCore') as THREE.Mesh | undefined
+        if (core) {
+          const mat = core.material as THREE.MeshStandardMaterial
+          mat.emissiveIntensity = 0.6 + this.charge * 2.4
+          core.scale.setScalar(1 + this.charge * 0.5)
+        }
       }
+      return
     }
 
-    const targetFov = this.ads ? this.def.adsFov : 75
-    this.camera.fov = THREE.MathUtils.damp(this.camera.fov, targetFov, 10, dt)
-    this.camera.updateProjectionMatrix()
+    if (def.burst) {
+      if (this.burstLeft > 0) {
+        this.burstTimer -= dt
+        if (this.burstTimer <= 0) {
+          this.fireOnce()
+          this.burstLeft--
+          this.burstTimer = def.burstGap ?? 0.05
+          if (this.burstLeft === 0) this.fireCooldown = 1 / def.fireRate
+        }
+      }
+      return
+    }
 
-    this.swayT += dt * (moving ? (grounded ? 9 : 4) : 1.5)
-    const bobAmp = moving && grounded ? 0.02 : 0.006
-    const adsMul = this.ads ? 0.35 : 1
-    const baseX = this.ads ? 0.05 : 0.28
-    const baseY = this.ads ? -0.18 : -0.28
-    const baseZ = this.ads ? -0.35 : -0.45
-    this.group.position.set(
-      baseX + Math.sin(this.swayT * 0.7) * 0.004 * adsMul,
-      baseY + Math.sin(this.swayT) * bobAmp * adsMul + this.recoilPitch * 0.5,
-      baseZ + this.recoilPitch * -0.4,
-    )
-    this.group.rotation.x = this.recoilPitch
-    this.group.rotation.y = Math.sin(this.swayT * 0.5) * 0.01 * adsMul
-    this.group.rotation.z = Math.sin(this.swayT * 0.5) * 0.01 * adsMul
-
-    if (this.current === 'plasma' && !this.firing) {
-      this.ammo.plasma.mag = Math.min(100, this.ammo.plasma.mag + 25 * dt)
+    if (this.firing && this.fireCooldown <= 0) {
+      this.fireOnce()
+      this.fireCooldown = 1 / def.fireRate
     }
   }
 
-  private finishReload() {
+  private releaseCharge(): void {
+    if (!this.def.chargeable) return
+    if (!this.charging && this.charge <= 0) return
+    this.charging = false
+    this.audio.stopCharge()
+    const c = this.charge
+    this.charge = 0
+    const core = this.models.plasma.getObjectByName('plasmaCore') as THREE.Mesh | undefined
+    if (core) {
+      ;(core.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.6
+      core.scale.setScalar(1)
+    }
+    if (this.reloading) return
+    this.fireOnce(c)
+    this.fireCooldown = 1 / this.def.fireRate
+  }
+
+  private finishReload(): void {
     const def = this.def
     const a = this.ammo[this.current]
     this.reloading = false
@@ -254,108 +337,221 @@ export class WeaponSystem {
     a.reserve -= take
   }
 
-  private fireOnce() {
+  private cancelFireState(): void {
+    this.burstLeft = 0
+    this.burstTimer = 0
+    this.charging = false
+    this.charge = 0
+    this.triggerLatched = false
+    this.audio.stopCharge()
+  }
+
+  private fireOnce(chargeAmt = 0): void {
+    const def = this.def
     const a = this.ammo[this.current]
-    if (a.mag <= 0) {
+    const cost = def.chargeable ? (chargeAmt > 0.85 ? 45 : Math.max(6, Math.floor(8 + chargeAmt * 12))) : 1
+    if (a.mag < cost) {
       this.audio.empty()
       this.startReload()
       return
     }
-    a.mag--
-    this.audio.playWeaponFire(this.current)
+    a.mag -= cost
+
+    const adsScale = THREE.MathUtils.lerp(1, 0.4, this.adsAmount)
+    this.audio.playWeaponFire(this.current, chargeAmt > 0.85)
     this.muzzleFlash = 1
-    this.bloom = Math.min(this.def.maxBloom, this.bloom + this.def.bloomPerShot * (this.ads ? 0.45 : 1))
-    this.recoilPitch += this.def.recoil * (this.ads ? 0.6 : 1)
-    this.effects.addTrauma(0.04)
+    this.muzzleLight.color.setHex(def.muzzleColor)
+    this.bloom = Math.min(def.maxBloom, this.bloom + def.bloomPerShot * adsScale)
+    this.recoilPitch += def.recoil * (0.75 + Math.random() * 0.5) * adsScale
+    this.recoilYaw += def.recoil * 0.35 * (Math.random() * 2 - 1) * adsScale
+    this.effects.addTrauma(0.035 + (chargeAmt > 0.85 ? 0.1 : 0))
 
     this.camera.getWorldDirection(this.aim)
-    const spreadAmt = this.bloom * (this.ads ? 0.4 : 1)
-    this.spreadDir
-      .set(
-        this.aim.x + (Math.random() - 0.5) * spreadAmt,
-        this.aim.y + (Math.random() - 0.5) * spreadAmt,
-        this.aim.z + (Math.random() - 0.5) * spreadAmt,
-      )
-      .normalize()
+    this.applySpread(this.aim, this.bloom * adsScale, this.spreadDir)
 
     const origin = this.camera.getWorldPosition(new THREE.Vector3())
-    const muzzle = origin.clone().addScaledVector(this.spreadDir, 0.8)
-    this.effects.spawnMuzzleSparks(muzzle, this.spreadDir)
+    const muzzle = this.muzzleLocal.clone().applyMatrix4(this.group.matrixWorld)
+    this.effects.spawnMuzzleSparks(muzzle, this.spreadDir, def.muzzleColor)
 
-    if (this.def.hitscan) {
+    if (def.hitscan) {
       this.raycaster.set(origin, this.spreadDir)
-      this.raycaster.far = 200
+      this.raycaster.far = 220
       const hits = this.raycaster.intersectObjects(this.getEnemyMeshes(), true)
-      let end = origin.clone().addScaledVector(this.spreadDir, 120)
-      if (hits.length) {
-        const h = hits[0]
-        end = h.point.clone()
-        let obj: THREE.Object3D | null = h.object
-        let enemyId: string | undefined
-        let headshot = false
-        while (obj) {
-          if (obj.userData.enemyId) {
-            enemyId = obj.userData.enemyId as string
-            headshot = !!obj.userData.isHead
-            break
-          }
-          obj = obj.parent
-        }
+      let end = origin.clone().addScaledVector(this.spreadDir, 140)
+      let normal = this.spreadDir.clone().multiplyScalar(-1)
+
+      if (hits.length > 0) {
+        const h = hits[0]!
+        end.copy(h.point)
+        if (h.face) normal.copy(h.face.normal).transformDirection(h.object.matrixWorld).normalize()
+        const { enemyId, headshot } = resolveEnemyHit(h.object)
         if (enemyId) {
-          this.onHitEnemy(enemyId, this.def.damage * (headshot ? 1.5 : 1), h.point, headshot)
-          this.effects.spawnPlasmaImpact(h.point, h.face?.normal ?? new THREE.Vector3(0, 1, 0), 0xffaa55)
+          this.onHitEnemy(enemyId, def.damage * (headshot ? 1.45 : 1), h.point.clone(), headshot)
+          this.effects.spawnPlasmaImpact(h.point, normal, 0xffaa55)
+        } else {
+          this.effects.spawnDecal({ position: end.clone(), normal: normal.clone(), size: 0.1 })
         }
       }
+
       this.effects.spawnTracer({
         origin: muzzle,
         end,
         color: this.current === 'br' ? 0xffe0a0 : 0xffd080,
+        duration: 0.055,
       })
     } else {
-      this.projectiles.spawn(muzzle, this.spreadDir, this.def.projectileSpeed ?? 50, {
-        damage: this.def.damage,
+      const over = chargeAmt > 0.85
+      this.projectiles.spawn(muzzle, this.spreadDir, (def.projectileSpeed ?? 50) * (over ? 1.3 : 1), {
+        damage: over ? def.damage * 4.2 : def.damage * (1 + chargeAmt * 1.5),
         fromPlayer: true,
-        color: 0x66aaff,
+        color: over ? 0x9bff6a : 0x3cff9a,
+        life: over ? 3.0 : 2.2,
+        splashRadius: over ? 2.2 : 0,
       })
     }
   }
 
-  private buildBR(): THREE.Group {
-    const g = new THREE.Group()
-    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.55), unscMatte('#3a4550')).translateZ(-0.15))
-    const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.4), forerunnerMetal(0.2))
-    barrel.position.set(0, 0.02, -0.5)
-    g.add(barrel)
-    const scope = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.08, 0.16), forerunnerGold())
-    scope.position.set(0, 0.12, -0.1)
-    g.add(scope)
-    const mag = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.16, 0.1), unscMatte('#2a3038'))
-    mag.position.set(0, -0.12, -0.05)
-    g.add(mag)
-    return g
+  private applySpread(dir: THREE.Vector3, radians: number, out: THREE.Vector3): void {
+    if (radians <= 1e-5) {
+      out.copy(dir).normalize()
+      return
+    }
+    const theta = Math.random() * Math.PI * 2
+    const phi = Math.sqrt(Math.random()) * radians
+    if (Math.abs(dir.y) < 0.99) this.right.crossVectors(dir, this.worldUp).normalize()
+    else this.right.set(1, 0, 0)
+    this.up.crossVectors(this.right, dir).normalize()
+    out
+      .copy(dir)
+      .addScaledVector(this.right, Math.cos(theta) * Math.sin(phi))
+      .addScaledVector(this.up, Math.sin(theta) * Math.sin(phi))
+      .normalize()
   }
 
-  private buildAR(): THREE.Group {
-    const g = new THREE.Group()
-    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.16, 0.5), unscMatte('#404850')))
-    const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 0.45, 8), forerunnerMetal(0.15))
-    barrel.rotation.x = Math.PI / 2
-    barrel.position.set(0, 0.02, -0.45)
-    g.add(barrel)
-    const stock = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.2), unscMatte('#2c333c'))
-    stock.position.set(0, -0.02, 0.28)
-    g.add(stock)
-    return g
-  }
+  private updateViewModel(dt: number, moving: boolean, grounded: boolean): void {
+    const sprinting = moving && grounded && this.adsAmount < 0.25
+    const bobAmp = sprinting ? 0.018 : moving && grounded ? 0.012 : 0.004
+    if (moving && grounded) this.bobT += dt * (sprinting ? 13 : 9)
+    else this.bobT += dt * 2
+    this.swayT += dt
 
-  private buildPlasma(): THREE.Group {
-    const g = new THREE.Group()
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 10), forerunnerMetal(0.5))
-    body.scale.set(1, 0.7, 1.3)
-    g.add(body)
-    const core = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 8), forerunnerGold())
-    core.position.z = -0.12
-    g.add(core)
-    return g
+    const adsMul = 1 - this.adsAmount * 0.85
+    const baseX = THREE.MathUtils.lerp(0.28, 0.02, this.adsAmount)
+    const baseY = THREE.MathUtils.lerp(-0.26, -0.16, this.adsAmount)
+    const baseZ = THREE.MathUtils.lerp(-0.45, -0.34, this.adsAmount)
+
+    let x = baseX + Math.sin(this.swayT * 1.2) * 0.006 * adsMul + Math.cos(this.bobT) * bobAmp * 0.55 * adsMul
+    let y =
+      baseY +
+      Math.cos(this.swayT * 1.05) * 0.005 * adsMul +
+      Math.sin(this.bobT * 2) * bobAmp * adsMul -
+      this.recoilPitch * 0.35
+    let z = baseZ + this.recoilPitch * 0.3
+
+    if (sprinting) {
+      y -= 0.035
+      z += 0.04
+      this.group.rotation.z = THREE.MathUtils.damp(this.group.rotation.z, -0.32, 8, dt)
+      this.group.rotation.x = THREE.MathUtils.damp(this.group.rotation.x, 0.22 + this.recoilPitch, 8, dt)
+    } else {
+      this.group.rotation.z = THREE.MathUtils.damp(this.group.rotation.z, this.recoilYaw * 0.8, 10, dt)
+      this.group.rotation.x = THREE.MathUtils.damp(this.group.rotation.x, this.recoilPitch, 10, dt)
+    }
+    this.group.rotation.y = Math.sin(this.swayT * 0.55) * 0.012 * adsMul + this.recoilYaw * 0.5
+
+    if (this.reloading) {
+      const t = 1 - this.reloadT / Math.max(0.01, this.def.reloadTime)
+      y -= Math.sin(t * Math.PI) * 0.1
+      this.group.rotation.x += Math.sin(t * Math.PI) * 0.3
+    }
+
+    this.group.position.set(x, y, z)
   }
+}
+
+function resolveEnemyHit(obj: THREE.Object3D): { enemyId?: string; headshot: boolean } {
+  let cur: THREE.Object3D | null = obj
+  let headshot = Boolean(obj.userData?.isHead) || obj.name === 'head'
+  while (cur) {
+    if (cur.userData?.enemyId) {
+      return { enemyId: cur.userData.enemyId as string, headshot: headshot || Boolean(cur.userData.isHead) }
+    }
+    if (cur.userData?.isHead) headshot = true
+    cur = cur.parent
+  }
+  return { headshot }
+}
+
+function mesh(geo: THREE.BufferGeometry, mat: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
+  const m = new THREE.Mesh(geo, mat)
+  m.position.set(x, y, z)
+  return m
+}
+
+function buildBR(): THREE.Group {
+  const g = new THREE.Group()
+  const body = unscMatte('#2f3842')
+  const dark = unscMatte('#1a2028')
+  g.add(mesh(new THREE.BoxGeometry(0.1, 0.13, 0.56), body, 0, 0, -0.12))
+  g.add(mesh(new THREE.BoxGeometry(0.045, 0.045, 0.4), forerunnerMetal(0.25), 0, 0.02, -0.52))
+  g.add(mesh(new THREE.BoxGeometry(0.06, 0.07, 0.16), forerunnerGold(), 0, 0.11, -0.08))
+  g.add(mesh(new THREE.BoxGeometry(0.055, 0.15, 0.09), dark, 0, -0.13, 0.02))
+  g.add(mesh(new THREE.BoxGeometry(0.08, 0.1, 0.2), body, 0, -0.01, 0.34))
+  g.add(mesh(new THREE.BoxGeometry(0.105, 0.025, 0.12), forerunnerGold(), 0, -0.04, -0.2))
+  g.add(mesh(new THREE.BoxGeometry(0.11, 0.06, 0.22), dark, 0, -0.03, -0.28))
+  return g
+}
+
+function buildAR(): THREE.Group {
+  const g = new THREE.Group()
+  const body = unscMatte('#3a4550')
+  const dark = unscMatte('#242c34')
+  g.add(mesh(new THREE.BoxGeometry(0.12, 0.15, 0.5), body))
+  const barrel = mesh(new THREE.CylinderGeometry(0.022, 0.028, 0.42, 8), forerunnerMetal(0.2), 0, 0.02, -0.46)
+  barrel.rotation.x = Math.PI / 2
+  g.add(barrel)
+  g.add(mesh(new THREE.BoxGeometry(0.045, 0.08, 0.28), forerunnerGold(), 0, 0.12, -0.02))
+  g.add(mesh(new THREE.BoxGeometry(0.07, 0.18, 0.1), dark, 0, -0.14, 0.02))
+  const grip = mesh(new THREE.BoxGeometry(0.055, 0.12, 0.07), dark, 0, -0.12, 0.16)
+  grip.rotation.x = 0.28
+  g.add(grip)
+  g.add(mesh(new THREE.BoxGeometry(0.125, 0.025, 0.08), forerunnerGold(), 0, 0.04, 0.18))
+  g.add(mesh(new THREE.BoxGeometry(0.09, 0.1, 0.18), body, 0, 0, 0.32))
+  return g
+}
+
+function buildPlasma(): THREE.Group {
+  const g = new THREE.Group()
+  const shell = forerunnerMetal(0.55)
+  const accent = forerunnerGold()
+  g.add(mesh(new THREE.BoxGeometry(0.14, 0.12, 0.28), shell, 0, 0.02, 0))
+  g.add(mesh(new THREE.BoxGeometry(0.16, 0.07, 0.18), shell, 0, 0.09, -0.04))
+  const nozzle = mesh(new THREE.CylinderGeometry(0.04, 0.055, 0.12, 6), accent, 0, 0.02, -0.22)
+  nozzle.rotation.x = Math.PI / 2
+  g.add(nozzle)
+  const core = mesh(
+    new THREE.SphereGeometry(0.048, 10, 10),
+    new THREE.MeshStandardMaterial({
+      color: 0x3cff9a,
+      emissive: 0x1aff80,
+      emissiveIntensity: 0.6,
+      metalness: 0.15,
+      roughness: 0.25,
+    }),
+    0,
+    0.02,
+    -0.1,
+  )
+  core.name = 'plasmaCore'
+  g.add(core)
+  const grip = mesh(new THREE.BoxGeometry(0.06, 0.14, 0.08), shell, 0, -0.11, 0.06)
+  grip.rotation.x = 0.35
+  g.add(grip)
+  g.add(mesh(new THREE.BoxGeometry(0.02, 0.1, 0.16), accent, 0.075, 0.02, 0))
+  g.add(mesh(new THREE.BoxGeometry(0.02, 0.1, 0.16), accent, -0.075, 0.02, 0))
+  return g
+}
+
+export function getWeaponCatalog(): readonly WeaponDef[] {
+  return Object.values(DEFS)
 }

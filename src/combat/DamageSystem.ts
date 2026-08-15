@@ -105,10 +105,15 @@ export class DamageSystem {
     this.timeSinceDamage = 0
     this.wasRecharging = false
 
-    const dir = this.tmp.copy(src).sub(new THREE.Vector3(0, 0, 0))
-    // Direction stored relative later by HUD via source position; keep a world dir sample.
-    if (dir.lengthSq() > 1e-6) this.pushDirection(dir.normalize(), Math.min(1, amount / 35))
-    else this.pushDirection(new THREE.Vector3(0, 0, -1), Math.min(1, amount / 35))
+    // Prefer horizontal indicator direction from source world position.
+    if (source) {
+      this.tmp.set(source.x, 0, source.z)
+      if (this.tmp.lengthSq() > 1e-6) this.tmp.normalize()
+      else this.tmp.set(0, 0, -1)
+    } else {
+      this.tmp.set(0, 0, -1)
+    }
+    this.pushDirection(this.tmp, Math.min(1, amount / 35))
 
     let remaining = amount
     let toShield = 0
