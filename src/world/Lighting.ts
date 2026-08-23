@@ -6,8 +6,11 @@ export interface LightingSystem {
   hemi: THREE.HemisphereLight;
   ambient: THREE.AmbientLight;
   lightShafts: THREE.Group;
+  lightShaftsEnabled: boolean;
   /** Advance optional drifting light-shaft planes. */
   update: (deltaSeconds: number) => void;
+  setShadowMapSize: (size: number) => void;
+  setLightShaftsEnabled: (enabled: boolean) => void;
   dispose: () => void;
 }
 
@@ -97,9 +100,24 @@ export function setupLighting(
       lightShafts.add(mesh);
       shaftMeshes.push(mesh);
     }
+  } else {
+    lightShafts.visible = false;
   }
 
   let elapsed = 0;
+  let shaftsEnabled = enableShafts;
+
+  const setShadowMapSize = (size: number) => {
+    sun.shadow.map?.dispose();
+    sun.shadow.map = null;
+    sun.shadow.mapSize.set(size, size);
+    sun.castShadow = size > 0;
+  };
+
+  const setLightShaftsEnabled = (enabled: boolean) => {
+    shaftsEnabled = enabled;
+    lightShafts.visible = enabled;
+  };
 
   return {
     sun,
@@ -107,8 +125,10 @@ export function setupLighting(
     hemi,
     ambient,
     lightShafts,
+    lightShaftsEnabled: shaftsEnabled,
     update(deltaSeconds: number) {
       elapsed += deltaSeconds;
+      if (!shaftsEnabled) return;
       for (const mesh of shaftMeshes) {
         const speed = mesh.userData.driftSpeed as number;
         mesh.position.y = (mesh.userData.baseY as number) + Math.sin(elapsed * speed) * 1.2;
@@ -117,6 +137,8 @@ export function setupLighting(
         mat.opacity = 0.028 + Math.sin(elapsed * speed * 1.5) * 0.012;
       }
     },
+    setShadowMapSize,
+    setLightShaftsEnabled,
     dispose() {
       scene.remove(sun);
       scene.remove(sun.target);

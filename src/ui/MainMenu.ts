@@ -3,13 +3,17 @@
  * Left-aligned classic menu over a live 3D ringworld backdrop.
  */
 
+import type { GameSettings, UserSettings } from '../settings/GameSettings'
+import { SettingsPanel } from './SettingsPanel'
+
 export interface MainMenuOptions {
   parent?: HTMLElement
   title?: string
   subtitle?: string
   onPlay?: () => void
-  onSettings?: () => void
+  onSettingsApply?: (settings: UserSettings) => void
   requestPointerLockTarget?: HTMLElement | null
+  settings?: GameSettings
 }
 
 const STYLE_ID = 'ringfall-menu-styles'
@@ -122,45 +126,6 @@ const MENU_CSS = `
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.rf-menu-settings {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(2, 4, 10, 0.55);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transition: opacity 0.25s ease, visibility 0.25s;
-  z-index: 5;
-}
-.rf-menu-settings.rf-open {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-}
-.rf-settings-card {
-  width: min(360px, 90vw);
-  padding: 1.5rem;
-  border: 1px solid rgba(126, 200, 160, 0.35);
-  background: rgba(6, 12, 14, 0.92);
-}
-.rf-settings-card h2 {
-  font-family: "Orbitron", sans-serif;
-  letter-spacing: 0.2em;
-  font-size: 0.9rem;
-  margin: 0 0 1rem;
-  color: var(--m-cyan);
-}
-.rf-settings-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.55rem 0;
-  border-bottom: 1px solid rgba(126, 200, 160, 0.12);
-  font-size: 0.9rem;
-  color: rgba(220, 235, 225, 0.8);
-}
-.rf-settings-close { margin-top: 1.1rem; width: 100%; min-width: 0; }
 `
 
 function ensureFonts(): void {
@@ -185,11 +150,11 @@ function ensureStyles(): void {
 
 export class MainMenu {
   readonly root: HTMLElement
-  private readonly settingsPanel: HTMLElement
+  private readonly settingsPanel: SettingsPanel | null
   private readonly playBtn: HTMLButtonElement
   private readonly settingsBtn: HTMLButtonElement
   private onPlay: (() => void) | null
-  private onSettings: (() => void) | null
+  private onSettingsApply: ((s: UserSettings) => void) | null
   private pointerLockTarget: HTMLElement | null
   private dismissed = false
 
@@ -200,7 +165,7 @@ export class MainMenu {
     const title = opts.title ?? 'RINGFALL'
     const subtitle = opts.subtitle ?? 'Infinite Protocols'
     this.onPlay = opts.onPlay ?? null
-    this.onSettings = opts.onSettings ?? null
+    this.onSettingsApply = opts.onSettingsApply ?? null
     this.pointerLockTarget = opts.requestPointerLockTarget ?? document.body
 
     const parent = opts.parent ?? document.body
@@ -221,33 +186,27 @@ export class MainMenu {
         </div>
         <p class="rf-menu-hint">WASD · Mouse · LMB fire · Esc releases lock</p>
       </div>
-      <div class="rf-menu-settings" aria-hidden="true">
-        <div class="rf-settings-card">
-          <h2>Settings</h2>
-          <div class="rf-settings-row"><span>Mouse Sensitivity</span><span>Stub</span></div>
-          <div class="rf-settings-row"><span>Field of View</span><span>Stub</span></div>
-          <div class="rf-settings-row"><span>Graphics Preset</span><span>High</span></div>
-          <div class="rf-settings-row"><span>Audio Mix</span><span>Positional + Dynamic</span></div>
-          <button type="button" class="rf-menu-btn rf-ghost rf-settings-close">Close</button>
-        </div>
-      </div>
     `
 
     parent.appendChild(this.root)
     this.playBtn = this.root.querySelector('.rf-play')!
     this.settingsBtn = this.root.querySelector('.rf-settings-open')!
-    this.settingsPanel = this.root.querySelector('.rf-menu-settings')!
     this.playBtn.addEventListener('click', () => this.handlePlay())
     this.settingsBtn.addEventListener('click', () => this.openSettings())
-    this.root.querySelector('.rf-settings-close')!.addEventListener('click', () => this.closeSettings())
-    this.settingsPanel.addEventListener('click', (e) => {
-      if (e.target === this.settingsPanel) this.closeSettings()
-    })
+
+    this.settingsPanel = opts.settings
+      ? new SettingsPanel({
+          parent: this.root,
+          settings: opts.settings,
+          onApply: (s) => this.onSettingsApply?.(s),
+          onClose: () => undefined,
+        })
+      : null
   }
 
-  setCallbacks(opts: { onPlay?: () => void; onSettings?: () => void }): void {
+  setCallbacks(opts: { onPlay?: () => void; onSettingsApply?: (s: UserSettings) => void }): void {
     if (opts.onPlay) this.onPlay = opts.onPlay
-    if (opts.onSettings) this.onSettings = opts.onSettings
+    if (opts.onSettingsApply) this.onSettingsApply = opts.onSettingsApply
   }
 
   setPointerLockTarget(el: HTMLElement | null): void {
@@ -270,17 +229,15 @@ export class MainMenu {
   }
 
   openSettings(): void {
-    this.settingsPanel.classList.add('rf-open')
-    this.settingsPanel.setAttribute('aria-hidden', 'false')
-    this.onSettings?.()
+    this.settingsPanel?.open()
   }
 
   closeSettings(): void {
-    this.settingsPanel.classList.remove('rf-open')
-    this.settingsPanel.setAttribute('aria-hidden', 'true')
+    this.settingsPanel?.close()
   }
 
   dispose(): void {
+    this.settingsPanel?.dispose()
     this.root.remove()
   }
 

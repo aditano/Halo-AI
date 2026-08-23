@@ -13,18 +13,21 @@ import {
 
 export interface RendererBundle {
   renderer: THREE.WebGLRenderer;
-  composer: EffectComposer | null;
+  composer: EffectComposer;
   camera: THREE.PerspectiveCamera;
   scene: THREE.Scene;
-  bloomPass: UnrealBloomPass | null;
-  bloom: UnrealBloomPass | null;
-  smaaPass: SMAAPass | null;
-  vignettePass: ShaderPass | null;
+  bloomPass: UnrealBloomPass;
+  bloom: UnrealBloomPass;
+  smaaPass: SMAAPass;
+  vignettePass: ShaderPass;
   performance: PerformanceSettings;
   resize: (width?: number, height?: number) => void;
   render: (deltaSeconds?: number) => void;
   setBloom: (strength: number) => void;
   setPointerCapture: (enabled: boolean) => void;
+  applyPerformance: (perf: PerformanceSettings) => void;
+  setAutoDowngrade: (enabled: boolean) => void;
+  getFps: () => number;
   dispose: () => void;
 }
 
@@ -36,6 +39,7 @@ export interface RendererSetupOptions {
   near?: number;
   far?: number;
   performance?: PerformanceSettings;
+  autoDowngrade?: boolean;
 }
 
 const VignetteShader = {
@@ -69,17 +73,13 @@ const VignetteShader = {
 
 /**
  * WebGL renderer with adaptive post-processing for Chrome + Safari.
- * Falls back to direct rendering on low tier (no bloom/SMAA).
  */
 export function createRenderer(
   container: HTMLElement,
   options: RendererSetupOptions = {},
 ): RendererBundle {
   const perf = options.performance ?? detectPerformanceSettings();
-  const maxPixelRatio = options.maxPixelRatio ?? perf.maxPixelRatio;
-  const enableVignette = options.vignette !== false && perf.enableVignette;
   const bloomStrength = options.bloomStrength ?? 0.48;
-  const usePost = perf.enableBloom || perf.enableSMAA || enableVignette;
 
   const width = Math.max(1, container.clientWidth || window.innerWidth);
   const height = Math.max(1, container.clientHeight || window.innerHeight);
@@ -103,7 +103,7 @@ export function createRenderer(
     alpha: false,
   });
   renderer.setSize(width, height, false);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, perf.maxPixelRatio));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.2;
@@ -115,42 +115,42 @@ export function createRenderer(
   renderer.domElement.style.touchAction = 'none';
   container.appendChild(renderer.domElement);
 
-  let composer: EffectComposer | null = null;
-  let bloomPass: UnrealBloomPass | null = null;
-  let smaaPass: SMAAPass | null = null;
-  let vignettePass: ShaderPass | null = null;
+  const composer = new EffectComposer(renderer);
+  composer.setSize(width, height);
+  composer.setPixelRatio(renderer.getPixelRatio());
 
-  if (usePost) {
-    composer = new EffectComposer(renderer);
-    composer.setSize(width, height);
-    composer.setPixelRatio(renderer.getPixelRatio());
+  const renderPass = new RenderPass(scene, camera);
+  composer.addPass(renderPass);
 
-    const renderPass = new RenderPass(scene, camera);
-    composer.addPass(renderPass);
+  const bw = Math.max(1, Math.floor(width * perf.bloomScale));
+  const bh = Math.max(1, Math.floor(height * perf.bloomScale));
+  const bloomPass = new UnrealBloomPass(new THREE.Vector2(bw, bh), bloomStrength, 0.75, 0.58);
+  bloomPass.enabled = perf.enableBloom;
+  composer.addPass(bloomPass);
 
-    if (perf.enableBloom) {
-      const bw = Math.max(1, Math.floor(width * perf.bloomScale));
-      const bh = Math.max(1, Math.floor(height * perf.bloomScale));
-      bloomPass = new UnrealBloomPass(new THREE.Vector2(bw, bh), bloomStrength, 0.75, 0.58);
-      composer.addPass(bloomPass);
-    }
+  const smaaPass = new SMAAPass();
+  smaaPass.enabled = perf.enableSMAA;
+  composer.addPass(smaaPass);
 
-    if (perf.enableSMAA) {
-      smaaPass = new SMAAPass();
-      composer.addPass(smaaPass);
-    }
+  const vignettePass = new ShaderPass(VignetteShader);
+  vignettePass.enabled = perf.enableVignette;
+  composer.addPass(vignettePass);
 
-    vignettePass = new ShaderPass(VignetteShader);
-    vignettePass.enabled = enableVignette;
-    composer.addPass(vignettePass);
+  const outputPass = new OutputPass();
+  composer.addPass(outputPass);
 
-    const outputPass = new OutputPass();
-    composer.addPass(outputPass);
-  }
-
+  let currentPerf = { ...perf };
+  let autoDowngrade = options.autoDowngrade !== false;
   let frameBudget = 0;
   let badFrames = 0;
-  let currentPerf = perf;
+  let displayFps = 60;
+
+  const resizeBloom = (nextW: number, nextH: number) => {
+    const bloomW = Math.max(1, Math.floor(nextW * currentPerf.bloomScale));
+    const bloomH = Math.max(1, Math.floor(nextH * currentPerf.bloomScale));
+    bloomPass.resolution.set(bloomW, bloomH);
+    bloomPass.setSize(bloomW, bloomH);
+  };
 
   const resize = (w?: number, h?: number) => {
     const nextW = Math.max(1, w ?? (container.clientWidth || window.innerWidth));
@@ -159,20 +159,23 @@ export function createRenderer(
     camera.updateProjectionMatrix();
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, currentPerf.maxPixelRatio));
     renderer.setSize(nextW, nextH, false);
-    if (composer) {
-      composer.setSize(nextW, nextH);
-      composer.setPixelRatio(renderer.getPixelRatio());
-    }
-    if (bloomPass) {
-      const bw = Math.max(1, Math.floor(nextW * currentPerf.bloomScale));
-      const bh = Math.max(1, Math.floor(nextH * currentPerf.bloomScale));
-      bloomPass.resolution.set(bw, bh);
-      bloomPass.setSize(bw, bh);
-    }
-    if (smaaPass) {
-      const pixelRatio = renderer.getPixelRatio();
-      smaaPass.setSize(nextW * pixelRatio, nextH * pixelRatio);
-    }
+    composer.setSize(nextW, nextH);
+    composer.setPixelRatio(renderer.getPixelRatio());
+    resizeBloom(nextW, nextH);
+    const pixelRatio = renderer.getPixelRatio();
+    smaaPass.setSize(nextW * pixelRatio, nextH * pixelRatio);
+  };
+
+  const applyPerformance = (next: PerformanceSettings) => {
+    currentPerf = { ...next };
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, currentPerf.maxPixelRatio));
+    bloomPass.enabled = currentPerf.enableBloom;
+    smaaPass.enabled = currentPerf.enableSMAA;
+    vignettePass.enabled = currentPerf.enableVignette;
+    const w = Math.max(1, container.clientWidth || window.innerWidth);
+    const h = Math.max(1, container.clientHeight || window.innerHeight);
+    resizeBloom(w, h);
+    resize();
   };
 
   const onWindowResize = () => resize();
@@ -180,34 +183,23 @@ export function createRenderer(
 
   const render = (deltaSeconds = 0) => {
     if (deltaSeconds > 0) {
-      frameBudget += deltaSeconds;
-      if (frameBudget >= 1.5) {
-        const fps = (1 / deltaSeconds);
-        if (fps < 42) badFrames += 1;
-        else badFrames = Math.max(0, badFrames - 1);
-        frameBudget = 0;
-        if (badFrames >= 3 && currentPerf.tier !== 'low') {
-          currentPerf = downgradeSettings(currentPerf);
-          badFrames = 0;
-          renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, currentPerf.maxPixelRatio));
-          if (!currentPerf.enableBloom && bloomPass && composer) {
-            composer.removePass(bloomPass);
-            bloomPass.dispose();
-            bloomPass = null;
+      displayFps = displayFps * 0.9 + (1 / deltaSeconds) * 0.1;
+      if (autoDowngrade) {
+        frameBudget += deltaSeconds;
+        if (frameBudget >= 1.5) {
+          const fps = 1 / deltaSeconds;
+          if (fps < 42) badFrames += 1;
+          else badFrames = Math.max(0, badFrames - 1);
+          frameBudget = 0;
+          if (badFrames >= 3 && currentPerf.tier !== 'low') {
+            applyPerformance(downgradeSettings(currentPerf));
+            badFrames = 0;
           }
-          if (!currentPerf.enableSMAA && smaaPass && composer) {
-            composer.removePass(smaaPass);
-            smaaPass.dispose();
-            smaaPass = null;
-          }
-          if (!currentPerf.enableVignette && vignettePass) vignettePass.enabled = false;
-          resize();
         }
       }
     }
 
-    if (composer) composer.render();
-    else renderer.render(scene, camera);
+    composer.render();
   };
 
   const setPointerCapture = (enabled: boolean) => {
@@ -216,7 +208,7 @@ export function createRenderer(
 
   const dispose = () => {
     window.removeEventListener('resize', onWindowResize);
-    composer?.dispose();
+    composer.dispose();
     renderer.dispose();
     renderer.domElement.remove();
   };
@@ -234,9 +226,16 @@ export function createRenderer(
     resize,
     render,
     setBloom: (strength: number) => {
-      if (bloomPass) bloomPass.strength = strength;
+      bloomPass.strength = strength;
     },
     setPointerCapture,
+    applyPerformance,
+    setAutoDowngrade: (enabled: boolean) => {
+      autoDowngrade = enabled;
+      badFrames = 0;
+      frameBudget = 0;
+    },
+    getFps: () => displayFps,
     dispose,
   };
 }

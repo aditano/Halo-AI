@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { createRenderer } from '../rendering/RendererSetup'
-import { detectPerformanceSettings } from '../rendering/PerformanceProfile'
+import type { PerformanceSettings } from '../rendering/PerformanceProfile'
 import { createSkyAtmosphere } from '../world/SkyAtmosphere'
 import { setupLighting } from '../world/Lighting'
 import { buildEnvironment, sampleGroundHeight } from '../world/Environment'
@@ -13,8 +13,10 @@ import { EffectsManager } from '../vfx/EffectsManager'
 import { EnemyManager } from '../enemies/EnemyManager'
 import { HUD } from '../ui/HUD'
 import { MainMenu } from '../ui/MainMenu'
+import { FpsCounter } from '../ui/FpsCounter'
 import { HaloCEMenuWorld } from '../ui/HaloCEMenuWorld'
 import { applyEnvironmentMap } from '../rendering/EnvironmentMap'
+import { GameSettings, type UserSettings } from '../settings/GameSettings'
 
 const DEFAULT_SUBTITLE = 'Infinite Protocols'
 
@@ -51,10 +53,16 @@ export class Game {
   private betweenWaveBanner = false
   private crosshairTick = 0
   private hudSyncT = 0
-  private readonly perf = detectPerformanceSettings()
+  private perf: PerformanceSettings
+  private readonly settings = new GameSettings()
+  private readonly fpsCounter: FpsCounter
 
   constructor(container: HTMLElement) {
-    this.renderer = createRenderer(container, { performance: this.perf })
+    this.perf = this.settings.toPerformanceSettings()
+    this.renderer = createRenderer(container, {
+      performance: this.perf,
+      autoDowngrade: this.settings.get().autoOptimize,
+    })
     if (this.perf.environmentMap) {
       applyEnvironmentMap(this.renderer.renderer, this.renderer.scene)
     }
@@ -120,15 +128,19 @@ export class Game {
 
     this.ceMenu = new HaloCEMenuWorld(this.renderer.scene)
     this.hud = new HUD({ parent: container })
+    this.fpsCounter = new FpsCounter(container)
     this.menu = new MainMenu({
       parent: container,
       title: 'RINGFALL',
       subtitle: DEFAULT_SUBTITLE,
+      settings: this.settings,
       onPlay: () => this.start(),
+      onSettingsApply: () => this.applySettings(),
       requestPointerLockTarget: this.renderer.renderer.domElement,
     })
     this.statusEl = this.menu.root.querySelector('.rf-menu-sub') as HTMLElement | null
 
+    this.applySettings()
     this.enterMenuWorld()
 
     this.damage.onDamage((e) => {
@@ -178,6 +190,21 @@ export class Game {
     requestAnimationFrame((t) => this.frame(t))
   }
 
+  private applySettings(_user?: UserSettings): void {
+    this.perf = this.settings.toPerformanceSettings()
+    const user = this.settings.get()
+    this.renderer.applyPerformance(this.perf)
+    this.renderer.setAutoDowngrade(user.autoOptimize)
+    this.lighting.setShadowMapSize(this.perf.shadowMapSize)
+    this.lighting.setLightShaftsEnabled(this.perf.lightShafts)
+    this.audio.setMasterVolume(user.masterVolume)
+    this.audio.setSfxVolume(user.sfxVolume)
+    this.fpsCounter.setVisible(user.showFps)
+    if (this.running && !this.menu.isVisible) {
+      this.lighting.lightShafts.visible = this.perf.lightShafts && this.lighting.lightShaftsEnabled
+    }
+  }
+
   private pauseToMenu() {
     this.enterMenuWorld()
     this.menu.show()
@@ -199,7 +226,7 @@ export class Game {
     this.ceMenu.hide()
     this.envRoot.visible = true
     this.sky.sky.visible = true
-    this.lighting.lightShafts.visible = this.perf.lightShafts
+    this.lighting.lightShafts.visible = this.perf.lightShafts && this.lighting.lightShaftsEnabled
     this.weapons.group.visible = true
     this.renderer.setBloom(0.45)
     this.renderer.camera.fov = 75
@@ -411,6 +438,7 @@ export class Game {
     }
 
     this.renderer.render(dt)
+    this.fpsCounter.update(dt)
     requestAnimationFrame((t) => this.frame(t))
   }
 

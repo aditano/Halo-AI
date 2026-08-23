@@ -10,3 +10,6 @@ export {
   MainMenu,
   type MainMenuOptions,
 } from './MainMenu'
+
+export { SettingsPanel, type SettingsPanelOptions } from './SettingsPanel'
+export { FpsCounter } from './FpsCounter'
