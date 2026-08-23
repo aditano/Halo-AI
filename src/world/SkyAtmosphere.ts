@@ -55,7 +55,7 @@ void main() {
   col += vec3(1.0, 0.92, 0.72) * sunGlow;
 
   // Subtle atmospheric haze brightening near horizon.
-  float haze = exp(-abs(h) * 4.5) * 0.12;
+  float haze = exp(-abs(h) * 4.5) * 0.06;
   col += uHorizon * haze;
 
   gl_FragColor = vec4(col, 1.0);
@@ -72,10 +72,10 @@ export function createSkyAtmosphere(
 ): SkyAtmosphere {
   const radius = options.radius ?? 900;
 
-  const zenith = new THREE.Color(0x5ec8e0);
-  const horizon = new THREE.Color(0xf5dca0);
-  const ground = new THREE.Color(0x6a9a78);
-  const fogColor = new THREE.Color(0xb8dce8);
+  const zenith = new THREE.Color(0x4a9cb0);
+  const horizon = new THREE.Color(0xc8b880);
+  const ground = new THREE.Color(0x5a8a68);
+  const fogColor = new THREE.Color(0x98bcc8);
 
   const sunDirection = new THREE.Vector3(42, 85, 22).normalize();
 
@@ -84,7 +84,7 @@ export function createSkyAtmosphere(
     uHorizon: { value: horizon },
     uGround: { value: ground },
     uSunDirection: { value: sunDirection.clone() },
-    uSunIntensity: { value: 0.88 },
+    uSunIntensity: { value: 0.52 },
     uGlowPower: { value: 32.0 },
   };
 
@@ -96,7 +96,7 @@ export function createSkyAtmosphere(
     depthWrite: false,
   });
 
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(radius, 64, 32), skyMat);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(radius, 48, 24), skyMat);
   sky.name = 'SkyDome';
   sky.frustumCulled = false;
   sky.renderOrder = -10;
@@ -108,7 +108,7 @@ export function createSkyAtmosphere(
     new THREE.MeshBasicMaterial({
       color: 0xfff0c8,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.62,
       depthWrite: false,
       fog: false,
     }),
@@ -123,8 +123,8 @@ export function createSkyAtmosphere(
   const ringBand = createRingWorldBand(radius * 0.88);
   scene.add(ringBand);
 
-  scene.fog = new THREE.FogExp2(0xb0dce8, 0.0028);
-  scene.background = new THREE.Color(0x78c4d8);
+  scene.fog = new THREE.FogExp2(0x98bcc8, 0.0032);
+  scene.background = new THREE.Color(0x68a8b8);
 
   return {
     sky,

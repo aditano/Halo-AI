@@ -63,9 +63,8 @@ const VignetteShader = {
     void main() {
       vec4 texel = texture2D(tDiffuse, vUv);
       vec2 uv = (vUv - 0.5) * 2.0;
-      float vignette = smoothstep(0.8, offset * 0.25, length(uv));
-      texel.rgb = mix(texel.rgb, texel.rgb * (1.0 - darkness), vignette * 0.58);
-      texel.rgb = mix(texel.rgb, texel.rgb * vec3(0.92, 0.98, 1.02), 0.12);
+      float vignette = smoothstep(0.65, offset * 0.22, length(uv));
+      texel.rgb = mix(texel.rgb, texel.rgb * (1.0 - darkness), vignette * 0.72);
       gl_FragColor = texel;
     }
   `,
@@ -97,7 +96,7 @@ export function createRenderer(
   camera.rotation.order = 'YXZ';
 
   const renderer = new THREE.WebGLRenderer({
-    antialias: !perf.enableSMAA,
+    antialias: false,
     powerPreference: 'high-performance',
     stencil: false,
     alpha: false,
@@ -106,7 +105,7 @@ export function createRenderer(
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, perf.maxPixelRatio));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
+  renderer.toneMappingExposure = perf.toneMappingExposure ?? 0.92;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.domElement.style.display = 'block';
@@ -166,8 +165,12 @@ export function createRenderer(
     smaaPass.setSize(nextW * pixelRatio, nextH * pixelRatio);
   };
 
+  const needsComposer = () =>
+    currentPerf.enableBloom || currentPerf.enableSMAA || currentPerf.enableVignette;
+
   const applyPerformance = (next: PerformanceSettings) => {
     currentPerf = { ...next };
+    renderer.toneMappingExposure = currentPerf.toneMappingExposure ?? 0.92;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, currentPerf.maxPixelRatio));
     bloomPass.enabled = currentPerf.enableBloom;
     smaaPass.enabled = currentPerf.enableSMAA;
@@ -186,20 +189,28 @@ export function createRenderer(
       displayFps = displayFps * 0.9 + (1 / deltaSeconds) * 0.1;
       if (autoDowngrade) {
         frameBudget += deltaSeconds;
-        if (frameBudget >= 1.5) {
+        if (frameBudget >= 0.75) {
           const fps = 1 / deltaSeconds;
-          if (fps < 42) badFrames += 1;
+          if (fps < 50) badFrames += 1;
           else badFrames = Math.max(0, badFrames - 1);
           frameBudget = 0;
-          if (badFrames >= 3 && currentPerf.tier !== 'low') {
-            applyPerformance(downgradeSettings(currentPerf));
+          if (badFrames >= 2) {
+            const prevTier = currentPerf.tier;
+            const next = downgradeSettings(currentPerf);
+            if (next.tier !== prevTier || next.maxPixelRatio !== currentPerf.maxPixelRatio) {
+              applyPerformance(next);
+            }
             badFrames = 0;
           }
         }
       }
     }
 
-    composer.render();
+    if (needsComposer()) {
+      composer.render();
+    } else {
+      renderer.render(scene, camera);
+    }
   };
 
   const setPointerCapture = (enabled: boolean) => {

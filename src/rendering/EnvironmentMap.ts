@@ -32,7 +32,7 @@ export function applyEnvironmentMap(
 
   const envMap = pmrem.fromScene(envScene, 0.04).texture
   scene.environment = envMap
-  scene.environmentIntensity = 0.85
+  scene.environmentIntensity = 0.45
 
   envScene.traverse((o) => {
     const m = o as THREE.Mesh

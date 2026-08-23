@@ -1,5 +1,6 @@
 import {
   detectPerformanceSettings,
+  isMac,
   type PerformanceSettings,
   type QualityTier,
 } from '../rendering/PerformanceProfile'
@@ -25,7 +26,8 @@ export interface UserSettings {
   sfxVolume: number
 }
 
-const STORAGE_KEY = 'ringfall-settings-v1'
+const STORAGE_KEY = 'ringfall-settings-v2'
+const LEGACY_STORAGE_KEY = 'ringfall-settings-v1'
 
 export const DEFAULT_SETTINGS: UserSettings = {
   graphicsPreset: 'auto',
@@ -71,7 +73,7 @@ const PRESET_DEFAULTS: Record<Exclude<GraphicsPreset, 'auto' | 'custom'>, Partia
     environmentReflections: true,
   },
   ultra: {
-    resolutionScale: 1.5,
+    resolutionScale: 1.25,
     shadows: 'high',
     bloom: true,
     antialiasing: 'smaa',
@@ -151,10 +153,21 @@ export class GameSettings {
 
   load(): void {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY)
+      let raw = localStorage.getItem(STORAGE_KEY)
+      if (!raw) {
+        const legacy = localStorage.getItem(LEGACY_STORAGE_KEY)
+        if (legacy) raw = legacy
+      }
       if (!raw) return
       const parsed = JSON.parse(raw) as Partial<UserSettings>
       this.settings = { ...DEFAULT_SETTINGS, ...parsed }
+
+      // Mac laptops often saved ultra/high from desktop testing — reset to auto defaults.
+      if (isMac() && (this.settings.graphicsPreset === 'ultra' || this.settings.graphicsPreset === 'high')) {
+        this.settings.graphicsPreset = 'auto'
+        Object.assign(this.settings, this.autoBaselineFields())
+        this.save()
+      }
     } catch {
       this.settings = { ...DEFAULT_SETTINGS }
     }
@@ -206,13 +219,14 @@ export class GameSettings {
       maxPixelRatio: Math.max(0.75, maxPixelRatio),
       shadowMapSize: mapSize,
       enableBloom: s.bloom,
-      bloomScale: tier === 'high' ? 0.65 : 0.5,
+      bloomScale: tier === 'high' ? 0.55 : 0.45,
       enableSMAA: s.antialiasing === 'smaa',
       enableVignette: s.vignette,
       lightShafts: s.lightShafts,
       environmentMap: s.environmentReflections,
-      crosshairRayInterval: tier === 'high' ? 2 : tier === 'medium' ? 4 : 6,
-      hudSyncInterval: tier === 'high' ? 1 / 30 : 1 / 20,
+      crosshairRayInterval: tier === 'high' ? 2 : tier === 'medium' ? 4 : 8,
+      hudSyncInterval: tier === 'high' ? 1 / 30 : tier === 'medium' ? 1 / 20 : 1 / 12,
+      toneMappingExposure: tier === 'high' ? 0.95 : tier === 'medium' ? 0.92 : 0.88,
     }
   }
 }

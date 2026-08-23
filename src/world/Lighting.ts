@@ -35,8 +35,8 @@ export function setupLighting(
   const enableShafts = options.lightShafts !== false;
   const shadowSize = options.shadowMapSize ?? 2048;
 
-  // Bright Infinite-style key — slightly cooler white-gold.
-  const sun = new THREE.DirectionalLight(0xffe8cc, 2.45);
+  // Balanced key — readable outdoors without blowing out mids.
+  const sun = new THREE.DirectionalLight(0xffe8cc, 1.65);
   sun.position.set(42, 85, 22);
   sun.castShadow = true;
   sun.shadow.mapSize.set(shadowSize, shadowSize);
@@ -56,17 +56,17 @@ export function setupLighting(
   sun.target.position.set(0, 0, 0);
 
   // Cool teal fill from opposite sky.
-  const fill = new THREE.DirectionalLight(0xa8dff0, 0.85);
+  const fill = new THREE.DirectionalLight(0xa8dff0, 0.52);
   fill.position.set(-36, 28, -42);
   fill.castShadow = false;
   scene.add(fill);
 
   // Sky / ground bounce.
-  const hemi = new THREE.HemisphereLight(0x8ed4e8, 0x5a6a48, 0.95);
+  const hemi = new THREE.HemisphereLight(0x8ed4e8, 0x5a6a48, 0.62);
   scene.add(hemi);
 
   // Soft contact-ish ambient so shadowed cover stays readable for FPS play.
-  const ambient = new THREE.AmbientLight(0xc8e4f0, 0.38);
+  const ambient = new THREE.AmbientLight(0xc8e4f0, 0.26);
   scene.add(ambient);
 
   const lightShafts = new THREE.Group();

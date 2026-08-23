@@ -218,7 +218,7 @@ export class Game {
     this.sky.sky.visible = false
     this.lighting.lightShafts.visible = false
     this.weapons.group.visible = false
-    this.renderer.setBloom(0.65)
+    this.renderer.setBloom(0.35)
     this.renderer.setPointerCapture(false)
   }
 
@@ -228,7 +228,7 @@ export class Game {
     this.sky.sky.visible = true
     this.lighting.lightShafts.visible = this.perf.lightShafts && this.lighting.lightShaftsEnabled
     this.weapons.group.visible = true
-    this.renderer.setBloom(0.45)
+    this.renderer.setBloom(this.perf.enableBloom ? 0.22 : 0)
     this.renderer.camera.fov = 75
     this.renderer.camera.updateProjectionMatrix()
     this.renderer.setPointerCapture(true)
