@@ -72,6 +72,23 @@ const HUD_CSS = `
 
 .rf-hud * { box-sizing: border-box; }
 
+/* —— Wave counter —— */
+.rf-wave {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  letter-spacing: 0.42em;
+  text-transform: uppercase;
+  color: rgba(255, 154, 60, 0.88);
+  text-shadow: 0 0 16px rgba(255, 154, 60, 0.45);
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 154, 60, 0.25);
+  background: linear-gradient(180deg, rgba(8, 16, 20, 0.55), rgba(4, 8, 12, 0.25));
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
+}
+
 /* —— Crosshair / reticle —— */
 .rf-reticle {
   position: absolute;
@@ -423,6 +440,7 @@ export class HUD {
   private readonly killfeed: HTMLElement
   private readonly banner: HTMLElement
   private readonly pain: HTMLElement
+  private readonly waveEl: HTMLElement
 
   private ads = false
   private overEnemy = false
@@ -440,6 +458,7 @@ export class HUD {
     this.root.setAttribute('aria-hidden', 'true')
 
     this.root.innerHTML = `
+      <div class="rf-wave">WAVE 1</div>
       <div class="rf-pain"></div>
       <div class="rf-dmg-layer"></div>
       <div class="rf-reticle"><div class="rf-reticle-dot"></div></div>
@@ -481,6 +500,7 @@ export class HUD {
     this.killfeed = this.root.querySelector('.rf-killfeed')!
     this.banner = this.root.querySelector('.rf-banner')!
     this.pain = this.root.querySelector('.rf-pain')!
+    this.waveEl = this.root.querySelector('.rf-wave')!
 
     const segHost = this.root.querySelector('.rf-shield-segments')!
     for (let i = 0; i < this.segmentCount; i++) {
@@ -491,6 +511,10 @@ export class HUD {
       segHost.appendChild(seg)
       this.shieldSegs.push(seg)
     }
+  }
+
+  setWave(wave: number): void {
+    this.waveEl.textContent = `WAVE ${Math.max(1, wave)}`
   }
 
   show(): void {

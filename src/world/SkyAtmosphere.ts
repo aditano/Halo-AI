@@ -72,10 +72,10 @@ export function createSkyAtmosphere(
 ): SkyAtmosphere {
   const radius = options.radius ?? 900;
 
-  const zenith = new THREE.Color(0x4eb8d0);
-  const horizon = new THREE.Color(0xf2d498);
+  const zenith = new THREE.Color(0x5ec8e0);
+  const horizon = new THREE.Color(0xf5dca0);
   const ground = new THREE.Color(0x6a9a78);
-  const fogColor = new THREE.Color(0xb0d4e0);
+  const fogColor = new THREE.Color(0xb8dce8);
 
   const sunDirection = new THREE.Vector3(42, 85, 22).normalize();
 
@@ -84,8 +84,8 @@ export function createSkyAtmosphere(
     uHorizon: { value: horizon },
     uGround: { value: ground },
     uSunDirection: { value: sunDirection.clone() },
-    uSunIntensity: { value: 0.72 },
-    uGlowPower: { value: 36.0 },
+    uSunIntensity: { value: 0.88 },
+    uGlowPower: { value: 32.0 },
   };
 
   const skyMat = new THREE.ShaderMaterial({
@@ -123,8 +123,8 @@ export function createSkyAtmosphere(
   const ringBand = createRingWorldBand(radius * 0.88);
   scene.add(ringBand);
 
-  scene.fog = new THREE.FogExp2(0xb8d8e4, 0.0032);
-  scene.background = new THREE.Color(0x6eb8cc);
+  scene.fog = new THREE.FogExp2(0xb0dce8, 0.0028);
+  scene.background = new THREE.Color(0x78c4d8);
 
   return {
     sky,
@@ -155,9 +155,9 @@ function createRingWorldBand(radius: number): THREE.Mesh {
   // Thin toroidal strip suggesting the far side of the ring arcing overhead.
   const geo = new THREE.TorusGeometry(radius, radius * 0.018, 8, 128, Math.PI * 1.15);
   const mat = new THREE.MeshBasicMaterial({
-    color: 0x9ec9b8,
+    color: 0xa8d8c8,
     transparent: true,
-    opacity: 0.35,
+    opacity: 0.48,
     depthWrite: false,
     side: THREE.DoubleSide,
     fog: true,

@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { createRenderer } from '../rendering/RendererSetup'
 import { createSkyAtmosphere } from '../world/SkyAtmosphere'
 import { setupLighting } from '../world/Lighting'
-import { buildEnvironment } from '../world/Environment'
+import { buildEnvironment, sampleGroundHeight } from '../world/Environment'
 import { PlayerController } from '../player/PlayerController'
 import { AudioManager } from '../audio/AudioManager'
 import { DamageSystem } from '../combat/DamageSystem'
@@ -14,6 +14,8 @@ import { HUD } from '../ui/HUD'
 import { MainMenu } from '../ui/MainMenu'
 import { HaloCEMenuWorld } from '../ui/HaloCEMenuWorld'
 import { applyEnvironmentMap } from '../rendering/EnvironmentMap'
+
+const DEFAULT_SUBTITLE = 'Infinite Protocols'
 
 export class Game {
   private running = false
@@ -35,8 +37,14 @@ export class Game {
   private readonly ceMenu: HaloCEMenuWorld
   private statusEl: HTMLElement | null = null
   private readonly lookDir = new THREE.Vector3()
+  private readonly rightDir = new THREE.Vector3()
+  private readonly damageDir = new THREE.Vector3()
+  private readonly spawnPos = new THREE.Vector3(0, 1.7, 22)
+  private spawnYaw = Math.PI
   private menuMusicStarted = false
   private readonly heardProjectiles = new WeakSet<object>()
+  private readonly aimRay = new THREE.Raycaster()
+  private betweenWaveBanner = false
 
   constructor(container: HTMLElement) {
     this.renderer = createRenderer(container)
@@ -48,9 +56,13 @@ export class Game {
     this.envRoot = env.root
     this.player = new PlayerController(this.renderer.camera, this.renderer.renderer.domElement)
     this.player.setColliders(env.colliders)
+    this.player.setGroundSampler(sampleGroundHeight)
     if (env.spawnPoints[0]) {
-      this.player.position.copy(env.spawnPoints[0].position)
-      this.player.position.y = Math.max(this.player.position.y, 1.7)
+      this.spawnPos.copy(env.spawnPoints[0].position)
+      this.spawnYaw = env.spawnPoints[0].yaw
+      const ground = sampleGroundHeight(this.spawnPos.x, this.spawnPos.z)
+      this.spawnPos.y = ground + 1.7
+      this.player.resetTo(this.spawnPos, this.spawnYaw)
     }
 
     this.projectiles = new ProjectileManager(this.renderer.scene)
@@ -81,12 +93,25 @@ export class Game {
       },
     )
 
+    this.enemies.onWaveStarted = (wave) => {
+      this.betweenWaveBanner = false
+      this.hud.setWave(wave)
+      this.hud.showBanner(`WAVE ${wave}`)
+    }
+    this.enemies.onWaveCleared = (wave) => {
+      if (!this.running || !this.damage.alive) return
+      this.betweenWaveBanner = true
+      this.hud.showBanner(`WAVE ${wave} CLEARED`)
+      this.audio.setMusicIntensity(0.12)
+      this.audio.setMusicMode('explore')
+    }
+
     this.ceMenu = new HaloCEMenuWorld(this.renderer.scene)
     this.hud = new HUD({ parent: container })
     this.menu = new MainMenu({
       parent: container,
       title: 'RINGFALL',
-      subtitle: 'Infinite Protocols',
+      subtitle: DEFAULT_SUBTITLE,
       onPlay: () => this.start(),
       requestPointerLockTarget: this.renderer.renderer.domElement,
     })
@@ -98,9 +123,18 @@ export class Game {
       if (e.toShield > 0) this.audio.shieldHit()
       if (e.shieldBroken) this.audio.shieldBreak()
       if (e.toHealth > 0) this.audio.shieldHit()
-      const to = e.source.clone().sub(this.player.position)
-      const angle = Math.atan2(to.x, to.z)
-      this.hud.showDamageDirection(angle)
+      this.damageDir.copy(e.source).sub(this.player.position)
+      this.damageDir.y = 0
+      if (this.damageDir.lengthSq() > 1e-6) {
+        this.damageDir.normalize()
+        this.player.getLookDirection(this.lookDir)
+        this.lookDir.y = 0
+        if (this.lookDir.lengthSq() < 1e-6) this.lookDir.set(0, 0, -1)
+        else this.lookDir.normalize()
+        this.rightDir.crossVectors(this.lookDir, new THREE.Vector3(0, 1, 0)).normalize()
+        const angle = Math.atan2(this.damageDir.dot(this.rightDir), this.damageDir.dot(this.lookDir))
+        this.hud.showDamageDirection(angle)
+      }
       this.effects.addTrauma(0.1)
       if (e.shieldBroken) {
         this.effects.spawnShieldRipple(this.player.position.clone())
@@ -110,7 +144,6 @@ export class Game {
     })
 
     this.bindInput()
-    // Kick Gregorian menu bed on first gesture
     const kickMusic = () => {
       if (this.menuMusicStarted) return
       this.menuMusicStarted = true
@@ -118,6 +151,10 @@ export class Game {
     }
     window.addEventListener('pointerdown', kickMusic, { once: true })
     window.addEventListener('keydown', kickMusic, { once: true })
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) this.last = performance.now()
+    })
 
     this.player.onPointerUnlock(() => {
       if (this.running && this.damage.alive) {
@@ -138,7 +175,7 @@ export class Game {
     this.sky.sky.visible = false
     this.lighting.lightShafts.visible = false
     this.weapons.group.visible = false
-    this.renderer.setBloom(0.85)
+    this.renderer.setBloom(0.72)
   }
 
   private enterGameplayWorld() {
@@ -147,9 +184,23 @@ export class Game {
     this.sky.sky.visible = true
     this.lighting.lightShafts.visible = true
     this.weapons.group.visible = true
-    this.renderer.setBloom(0.45)
+    this.renderer.setBloom(0.52)
     this.renderer.camera.fov = 75
     this.renderer.camera.updateProjectionMatrix()
+  }
+
+  private resetMatch(): void {
+    this.damage.reset()
+    this.effects.resetTrauma()
+    this.projectiles.clear()
+    this.enemies.reset()
+    this.weapons.reset()
+    const ground = sampleGroundHeight(this.spawnPos.x, this.spawnPos.z)
+    this.spawnPos.y = ground + 1.7
+    this.player.resetTo(this.spawnPos, this.spawnYaw)
+    this.footT = 0
+    this.betweenWaveBanner = false
+    if (this.statusEl) this.statusEl.textContent = DEFAULT_SUBTITLE
   }
 
   private audioIntensity(): number {
@@ -175,6 +226,11 @@ export class Game {
       if (e.button === 2) this.weapons.setAds(false)
     })
     el.addEventListener('contextmenu', (e) => e.preventDefault())
+    el.addEventListener('click', () => {
+      if (this.running && this.damage.alive && !this.player.locked) {
+        this.player.lock()
+      }
+    })
     window.addEventListener('keydown', (e) => {
       if (!this.running) return
       if (e.code === 'KeyR') this.weapons.startReload()
@@ -196,20 +252,36 @@ export class Game {
   start() {
     void this.audio.resume()
     this.audio.ui()
+    this.resetMatch()
     this.running = true
-    this.damage.reset()
     this.menu.hide()
     this.hud.show()
     this.enterGameplayWorld()
     this.audio.setMusicMode('explore')
     this.audio.setMusicIntensity(0.15)
-    this.hud.showBanner(`WAVE ${Math.max(1, this.enemies.waveNumber || 1)}`)
     this.player.lock()
     this.renderer.camera.position.copy(this.player.position)
-    this.renderer.camera.rotation.set(0, 0, 0)
-    if (this.enemies.enemies.filter((e) => e.alive).length === 0) {
-      this.enemies.startWave(6)
+    this.renderer.camera.rotation.set(0, this.spawnYaw, 0)
+    this.enemies.startWave(6)
+  }
+
+  private updateCrosshairTarget(): void {
+    this.player.getLookDirection(this.lookDir)
+    this.aimRay.set(this.player.position, this.lookDir)
+    this.aimRay.far = 140
+    const hits = this.aimRay.intersectObjects(this.enemies.getMeshes(), true)
+    let overEnemy = false
+    if (hits.length > 0) {
+      let cur: THREE.Object3D | null = hits[0]!.object
+      while (cur) {
+        if (cur.userData?.enemyId) {
+          overEnemy = true
+          break
+        }
+        cur = cur.parent
+      }
     }
+    this.hud.setOverEnemy(overEnemy)
   }
 
   private syncHud() {
@@ -263,13 +335,16 @@ export class Game {
       this.resolveProjectileHits()
       this.effects.update(dt)
       this.effects.applyShakeToCamera(this.renderer.camera, dt)
+      this.updateCrosshairTarget()
       this.hud.update(dt)
       this.syncHud()
 
       const heat = this.audioIntensity()
-      this.audio.setMusicIntensity(heat)
-      if (heat > 0.35) this.audio.setMusicMode('combat')
-      else if (heat < 0.15) this.audio.setMusicMode('explore')
+      if (!this.betweenWaveBanner) {
+        this.audio.setMusicIntensity(heat)
+        if (heat > 0.35) this.audio.setMusicMode('combat')
+        else if (heat < 0.15) this.audio.setMusicMode('explore')
+      }
 
       if (moving && this.player.grounded) {
         this.footT += dt * (this.player.keys.sprint ? 2.2 : 1.6)
@@ -314,11 +389,10 @@ export class Game {
           if (!e.alive) continue
           const center = e.group.position.clone().setY(e.group.position.y + 1)
           if (p.mesh.position.distanceTo(center) < 1.1) {
-            const killed = e.takeDamage(p.damage, p.mesh.position.clone(), this.effects)
+            const killed = this.enemies.damageEnemy(e.id, p.damage, p.mesh.position.clone(), false)
             this.audio.hitmarker()
             this.hud.flashHitmarker(false)
             if (killed) {
-              this.enemies.kills++
               this.audio.enemyDeathAt(e.group.position)
               this.hud.pushKillFeed('HOSTILE', 'Plasma')
             }
@@ -329,7 +403,6 @@ export class Game {
         }
       } else if (p.mesh.position.distanceTo(playerPos) < 1.2) {
         this.damage.applyDamage(p.damage, p.mesh.position.clone())
-        this.audio.plasmaFireAt(p.mesh.position)
         p.alive = false
         this.effects.spawnPlasmaImpact(p.mesh.position.clone(), new THREE.Vector3(0, 1, 0))
       }

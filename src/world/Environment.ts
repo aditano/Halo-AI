@@ -669,6 +669,16 @@ function mulberry32(seed: number): () => number {
   };
 }
 
+/** Sample procedural arena ground height at world XZ (matches vertex displacement). */
+export function sampleGroundHeight(x: number, z: number): number {
+  const dist = Math.hypot(x, z);
+  const n = fbm2(x * 0.045, z * 0.045, () => 0);
+  let y = Math.sin(dist * 0.08) * 0.15 + n * 0.55;
+  y += Math.sin(x * 0.12) * Math.cos(z * 0.1) * 0.12;
+  if (dist < 10) y *= dist / 10;
+  return y;
+}
+
 /** Cheap value-noise FBM (seedless trig hash — stable across runs). */
 function fbm2(x: number, z: number, _rng: () => number): number {
   let v = 0;

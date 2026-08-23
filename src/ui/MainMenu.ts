@@ -40,7 +40,9 @@ const MENU_CSS = `
 .rf-menu-bg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(2,4,10,0.78) 0%, rgba(2,4,10,0.4) 38%, rgba(2,4,10,0.12) 65%, transparent 100%);
+  background:
+    radial-gradient(ellipse 70% 55% at 75% 35%, rgba(126, 200, 160, 0.14), transparent 55%),
+    linear-gradient(90deg, rgba(2, 4, 10, 0.82) 0%, rgba(2, 4, 10, 0.35) 42%, transparent 72%);
   pointer-events: none;
 }
 .rf-menu-panel {
@@ -95,6 +97,9 @@ const MENU_CSS = `
   background: linear-gradient(180deg, rgba(126, 200, 160, 0.16), rgba(8, 16, 12, 0.35));
   color: #f2f6f2;
   cursor: pointer;
+  pointer-events: auto;
+  position: relative;
+  z-index: 3;
   transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s;
 }
 .rf-menu-btn:hover {
@@ -125,12 +130,14 @@ const MENU_CSS = `
   background: rgba(2, 4, 10, 0.55);
   opacity: 0;
   visibility: hidden;
+  pointer-events: none;
   transition: opacity 0.25s ease, visibility 0.25s;
   z-index: 5;
 }
 .rf-menu-settings.rf-open {
   opacity: 1;
   visibility: visible;
+  pointer-events: auto;
 }
 .rf-settings-card {
   width: min(360px, 90vw);
@@ -205,7 +212,7 @@ export class MainMenu {
     this.root.innerHTML = `
       <div class="rf-menu-bg"></div>
       <div class="rf-menu-panel">
-        <div class="rf-menu-eyebrow">Rainfall // Campaign</div>
+        <div class="rf-menu-eyebrow">Ringfall // Campaign</div>
         <h1 class="rf-menu-title">${escapeHtml(title)}</h1>
         <p class="rf-menu-sub">${escapeHtml(subtitle)}</p>
         <div class="rf-menu-actions">
@@ -278,6 +285,8 @@ export class MainMenu {
   }
 
   private handlePlay(): void {
+    this.hide()
+    this.onPlay?.()
     const target = this.pointerLockTarget
     if (target && typeof target.requestPointerLock === 'function') {
       const result = target.requestPointerLock()
@@ -285,8 +294,6 @@ export class MainMenu {
         void (result as Promise<void>).catch(() => undefined)
       }
     }
-    this.hide()
-    this.onPlay?.()
   }
 }
 

@@ -47,6 +47,8 @@ export class EnemyManager {
   private waves: WaveDefinition[] | null = null
   private waveIndex = -1
   private useCustomWaves = false
+  onWaveCleared?: (wave: number) => void
+  onWaveStarted?: (wave: number) => void
 
   constructor(
     scene: THREE.Scene,
@@ -103,6 +105,19 @@ export class EnemyManager {
     this.spawnTimer = 0
     this.currentEliteChance = Math.min(0.55, 0.1 + this.wave * 0.08)
     this.phaseTimer = 0
+    this.onWaveStarted?.(this.wave)
+  }
+
+  reset(): void {
+    this.clear()
+    this.kills = 0
+    this.wave = 0
+    this.phase = 'idle'
+    this.waveIndex = -1
+    this.useCustomWaves = false
+    this.phaseTimer = 0
+    this.spawnQueue = 0
+    this.spawnTimer = 0
   }
 
   startCombat(): void {
@@ -197,6 +212,7 @@ export class EnemyManager {
       if (this.aliveCount === 0) {
         this.phase = 'between'
         this.phaseTimer = 2.0
+        this.onWaveCleared?.(this.wave)
       }
       return
     }

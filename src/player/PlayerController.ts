@@ -55,7 +55,10 @@ export class PlayerController {
   private readonly planar = new THREE.Vector3()
   private readonly accelVec = new THREE.Vector3()
   private colliders: AABB[] = []
+  private groundSampler?: (x: number, z: number) => number
   private unlockCb?: () => void
+  private hadLock = false
+  private readonly onLock: () => void
   private readonly onKeyDown: (e: KeyboardEvent) => void
   private readonly onKeyUp: (e: KeyboardEvent) => void
   private readonly onUnlock: () => void
@@ -67,15 +70,46 @@ export class PlayerController {
 
     this.onKeyDown = (e) => this.setKey(e.code, true, e)
     this.onKeyUp = (e) => this.setKey(e.code, false, e)
-    this.onUnlock = () => this.unlockCb?.()
+    this.onUnlock = () => {
+      if (this.hadLock) this.unlockCb?.()
+      this.hadLock = false
+    }
+    this.onLock = () => {
+      this.hadLock = true
+    }
 
     document.addEventListener('keydown', this.onKeyDown)
     document.addEventListener('keyup', this.onKeyUp)
     this.controls.addEventListener('unlock', this.onUnlock)
+    this.controls.addEventListener('lock', this.onLock)
   }
 
   setColliders(colliders: AABB[]): void {
     this.colliders = colliders
+  }
+
+  setGroundSampler(fn: (x: number, z: number) => number): void {
+    this.groundSampler = fn
+  }
+
+  resetTo(position: THREE.Vector3, yaw = 0): void {
+    this.position.copy(position)
+    this.velocity.set(0, 0, 0)
+    this.grounded = false
+    this.coyote = 0
+    this.jumpBuffer = 0
+    this.eyeHeight = EYE_HEIGHT
+    this.keys.forward = false
+    this.keys.back = false
+    this.keys.left = false
+    this.keys.right = false
+    this.keys.jump = false
+    this.keys.sprint = false
+    this.keys.crouch = false
+    this.hadLock = false
+    const cam = this.controls.object
+    cam.position.copy(position)
+    cam.rotation.set(0, yaw, 0)
   }
 
   lock(): void {
@@ -190,6 +224,7 @@ export class PlayerController {
     document.removeEventListener('keydown', this.onKeyDown)
     document.removeEventListener('keyup', this.onKeyUp)
     this.controls.removeEventListener('unlock', this.onUnlock)
+    this.controls.removeEventListener('lock', this.onLock)
     this.controls.unlock()
     this.controls.dispose()
   }
@@ -282,8 +317,10 @@ export class PlayerController {
       }
     }
 
-    if (axis === 'y' && this.position.y - this.eyeHeight < 0.05) {
-      this.position.y = this.eyeHeight + 0.05
+    const floor = this.groundSampler?.(this.position.x, this.position.z) ?? 0
+    const minY = floor + this.eyeHeight + 0.05
+    if (axis === 'y' && this.position.y < minY && this.velocity.y <= 0) {
+      this.position.y = minY
       this.velocity.y = 0
       this.grounded = true
     }

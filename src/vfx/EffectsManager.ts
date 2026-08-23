@@ -336,6 +336,12 @@ export class EffectsManager {
     this.trauma = Math.min(1, this.trauma + amount)
   }
 
+  resetTrauma(): void {
+    this.trauma = 0
+    this.shakeOffset.set(0, 0, 0)
+    this.shakeRoll = 0
+  }
+
   /** Alias used by some combat hooks. */
   addShake(amount: number): void {
     this.addTrauma(amount)

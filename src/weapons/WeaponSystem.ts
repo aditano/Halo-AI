@@ -192,6 +192,30 @@ export class WeaponSystem {
     return this.reloading
   }
 
+  reset(): void {
+    this.current = 'br'
+    this.ads = false
+    this.bloom = 0
+    this.ammo = {
+      br: { mag: DEFS.br.magSize, reserve: DEFS.br.reserve },
+      ar: { mag: DEFS.ar.magSize, reserve: DEFS.ar.reserve },
+      plasma: { mag: DEFS.plasma.magSize, reserve: 0 },
+    }
+    this.cancelFireState()
+    this.reloading = false
+    this.reloadT = 0
+    this.muzzleFlash = 0
+    this.muzzleLight.intensity = 0
+    this.recoilPitch = 0
+    this.recoilYaw = 0
+    this.adsAmount = 0
+    for (const [k, m] of Object.entries(this.models)) m.visible = k === 'br'
+    this.camera.fov = DEFS.br.hipFov
+    this.camera.updateProjectionMatrix()
+    this.group.position.set(0.28, -0.26, -0.45)
+    this.group.rotation.set(0, 0, 0)
+  }
+
   switchWeapon(id: WeaponId): void {
     if (id === this.current) return
     this.cancelFireState()

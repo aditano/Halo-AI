@@ -39,8 +39,8 @@ export interface RendererSetupOptions {
 const VignetteShader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
-    offset: { value: 0.35 },
-    darkness: { value: 0.55 },
+    offset: { value: 0.42 },
+    darkness: { value: 0.48 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -58,7 +58,9 @@ const VignetteShader = {
       vec4 texel = texture2D(tDiffuse, vUv);
       vec2 uv = (vUv - 0.5) * 2.0;
       float vignette = smoothstep(0.8, offset * 0.25, length(uv));
-      texel.rgb = mix(texel.rgb, texel.rgb * (1.0 - darkness), vignette * 0.65);
+      texel.rgb = mix(texel.rgb, texel.rgb * (1.0 - darkness), vignette * 0.58);
+      // Subtle teal lift in mids for Halo outdoor read.
+      texel.rgb = mix(texel.rgb, texel.rgb * vec3(0.92, 0.98, 1.02), 0.12);
       gl_FragColor = texel;
     }
   `,
@@ -74,7 +76,7 @@ export function createRenderer(
 ): RendererBundle {
   const maxPixelRatio = options.maxPixelRatio ?? 2;
   const enableVignette = options.vignette !== false;
-  const bloomStrength = options.bloomStrength ?? 0.42;
+  const bloomStrength = options.bloomStrength ?? 0.52;
 
   const width = Math.max(1, container.clientWidth || window.innerWidth);
   const height = Math.max(1, container.clientHeight || window.innerHeight);
@@ -100,12 +102,13 @@ export function createRenderer(
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.18;
+  renderer.toneMappingExposure = 1.24;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.domElement.style.display = 'block';
   renderer.domElement.style.width = '100%';
   renderer.domElement.style.height = '100%';
+  renderer.domElement.style.pointerEvents = 'none';
   container.appendChild(renderer.domElement);
 
   const composer = new EffectComposer(renderer);
@@ -118,8 +121,8 @@ export function createRenderer(
   const bloomPass = new UnrealBloomPass(
     new THREE.Vector2(width, height),
     bloomStrength,
-    0.7,
-    0.62,
+    0.82,
+    0.55,
   );
   composer.addPass(bloomPass);
 

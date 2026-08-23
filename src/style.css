@@ -8,7 +8,7 @@ html, body, #app {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #0a1216;
+  background: radial-gradient(ellipse 120% 80% at 50% 0%, #142830 0%, #0a1216 55%, #060a0c 100%);
   font-family: 'Rajdhani', system-ui, sans-serif;
   color: #e8f4f2;
   user-select: none;

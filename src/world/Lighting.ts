@@ -30,7 +30,7 @@ export function setupLighting(
   const enableShafts = options.lightShafts !== false;
 
   // Bright Infinite-style key — slightly cooler white-gold.
-  const sun = new THREE.DirectionalLight(0xffe8cc, 2.15);
+  const sun = new THREE.DirectionalLight(0xffe8cc, 2.45);
   sun.position.set(42, 85, 22);
   sun.castShadow = true;
   sun.shadow.mapSize.set(4096, 4096);
@@ -50,17 +50,17 @@ export function setupLighting(
   sun.target.position.set(0, 0, 0);
 
   // Cool teal fill from opposite sky.
-  const fill = new THREE.DirectionalLight(0xa8dff0, 0.7);
+  const fill = new THREE.DirectionalLight(0xa8dff0, 0.85);
   fill.position.set(-36, 28, -42);
   fill.castShadow = false;
   scene.add(fill);
 
   // Sky / ground bounce.
-  const hemi = new THREE.HemisphereLight(0x8ed4e8, 0x5a6a48, 0.85);
+  const hemi = new THREE.HemisphereLight(0x8ed4e8, 0x5a6a48, 0.95);
   scene.add(hemi);
 
   // Soft contact-ish ambient so shadowed cover stays readable for FPS play.
-  const ambient = new THREE.AmbientLight(0xc8e4f0, 0.32);
+  const ambient = new THREE.AmbientLight(0xc8e4f0, 0.38);
   scene.add(ambient);
 
   const lightShafts = new THREE.Group();
@@ -72,7 +72,7 @@ export function setupLighting(
     const shaftMat = new THREE.MeshBasicMaterial({
       color: 0xffe6b8,
       transparent: true,
-      opacity: 0.04,
+      opacity: 0.055,
       depthWrite: false,
       side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
