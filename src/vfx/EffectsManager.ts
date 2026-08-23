@@ -378,7 +378,7 @@ export class EffectsManager {
   applyShakeToCamera(camera: THREE.Camera, dt: number): void {
     const shake = this.getScreenShake(dt)
     camera.position.add(shake.offset)
-    camera.rotateZ(shake.roll)
+    // Roll omitted — rotateZ was accumulating every frame and caused camera hitch.
   }
 
   // —— update / dispose ————————————————————————————————————————————————

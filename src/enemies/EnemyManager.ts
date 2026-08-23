@@ -36,6 +36,8 @@ export class EnemyManager {
   private readonly audio: AudioManager
   private readonly arenaCenter = new THREE.Vector3()
   private readonly arenaRadius = 18
+  private readonly meshCache: THREE.Object3D[] = []
+  private meshCacheDirty = true
 
   private seq = 0
   private wave = 0
@@ -77,11 +79,18 @@ export class EnemyManager {
   }
 
   getMeshes(): THREE.Object3D[] {
-    const out: THREE.Object3D[] = []
-    for (const e of this.enemies) {
-      if (e.alive) out.push(...e.meshes)
+    if (this.meshCacheDirty) {
+      this.meshCache.length = 0
+      for (const e of this.enemies) {
+        if (e.alive) this.meshCache.push(...e.meshes)
+      }
+      this.meshCacheDirty = false
     }
-    return out
+    return this.meshCache
+  }
+
+  private invalidateMeshCache(): void {
+    this.meshCacheDirty = true
   }
 
   get aliveCount(): number {
@@ -134,6 +143,7 @@ export class EnemyManager {
     const e = new Enemy(kind, spawn, `e${this.seq++}`)
     this.enemies.push(e)
     this.scene.add(e.group)
+    this.invalidateMeshCache()
     return e
   }
 
@@ -143,6 +153,7 @@ export class EnemyManager {
     const killed = e.takeDamage(damage, point, this.effects, headshot)
     if (killed) {
       this.kills += 1
+      this.invalidateMeshCache()
       this.playDeathSfx()
     }
     return killed
@@ -161,6 +172,7 @@ export class EnemyManager {
     this.enemies.length = 0
     this.phase = 'idle'
     this.spawnQueue = 0
+    this.invalidateMeshCache()
   }
 
   dispose(): void {
@@ -177,13 +189,16 @@ export class EnemyManager {
   }
 
   private pruneDead(): void {
+    let removed = false
     for (let i = this.enemies.length - 1; i >= 0; i--) {
       const e = this.enemies[i]!
       if (e.state === EnemyState.Dead || (!e.alive && !e.group.visible)) {
         e.dispose()
         this.enemies.splice(i, 1)
+        removed = true
       }
     }
+    if (removed) this.invalidateMeshCache()
   }
 
   private updateWaves(dt: number): void {

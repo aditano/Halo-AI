@@ -16,6 +16,8 @@ export interface LightingOptions {
   lightShafts?: boolean;
   /** Arena radius used to size shafts / shadow camera. Default 80. */
   arenaRadius?: number;
+  /** Directional shadow map resolution. Default 2048. */
+  shadowMapSize?: number;
 }
 
 /**
@@ -28,15 +30,16 @@ export function setupLighting(
 ): LightingSystem {
   const arenaRadius = options.arenaRadius ?? 80;
   const enableShafts = options.lightShafts !== false;
+  const shadowSize = options.shadowMapSize ?? 2048;
 
   // Bright Infinite-style key — slightly cooler white-gold.
   const sun = new THREE.DirectionalLight(0xffe8cc, 2.45);
   sun.position.set(42, 85, 22);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(4096, 4096);
+  sun.shadow.mapSize.set(shadowSize, shadowSize);
   sun.shadow.bias = -0.00012;
   sun.shadow.normalBias = 0.04;
-  sun.shadow.radius = 4.5;
+  sun.shadow.radius = 2.5;
   const extent = arenaRadius * 1.15;
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far = extent * 3;
@@ -78,12 +81,12 @@ export function setupLighting(
       blending: THREE.AdditiveBlending,
     });
 
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < 5; i++) {
       const w = 3 + (i % 4) * 2.8;
       const h = 50 + (i % 3) * 16;
       const geo = new THREE.PlaneGeometry(w, h);
       const mesh = new THREE.Mesh(geo, shaftMat.clone());
-      const angle = (i / 8) * Math.PI * 2 + 0.35;
+      const angle = (i / 5) * Math.PI * 2 + 0.35;
       const dist = 10 + i * 5.5;
       mesh.position.set(Math.cos(angle) * dist, h * 0.35, Math.sin(angle) * dist);
       mesh.rotation.y = -angle + Math.PI * 0.5;

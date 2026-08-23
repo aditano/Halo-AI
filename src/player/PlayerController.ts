@@ -56,6 +56,7 @@ export class PlayerController {
   private readonly accelVec = new THREE.Vector3()
   private colliders: AABB[] = []
   private groundSampler?: (x: number, z: number) => number
+  private readonly colliderScratch: AABB[] = []
   private unlockCb?: () => void
   private hadLock = false
   private readonly onLock: () => void
@@ -283,8 +284,18 @@ export class PlayerController {
     const head = this.position.y + 0.15
     const px = this.position.x
     const pz = this.position.z
+    const horizRange = axis === 'y' ? 0 : 6.5
 
+    this.colliderScratch.length = 0
     for (const c of this.colliders) {
+      if (horizRange > 0) {
+        if (px + horizRange < c.min.x || px - horizRange > c.max.x) continue
+        if (pz + horizRange < c.min.z || pz - horizRange > c.max.z) continue
+      }
+      this.colliderScratch.push(c)
+    }
+
+    for (const c of this.colliderScratch) {
       const isGround = c.max.y <= 0.1 && c.min.y < 0
       if (isGround && axis !== 'y') continue
 
