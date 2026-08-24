@@ -393,6 +393,26 @@ const HUD_CSS = `
   100% { opacity: 0; }
 }
 
+/* —— Pointer lock hint (Safari drops lock often) —— */
+.rf-lock-hint {
+  position: absolute;
+  bottom: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: rgba(255, 154, 60, 0.92);
+  text-shadow: 0 0 16px rgba(255, 154, 60, 0.45);
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 154, 60, 0.35);
+  background: rgba(8, 16, 20, 0.65);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.rf-lock-hint.rf-show { opacity: 1; }
+
 /* —— Edge vignette when damaged —— */
 .rf-pain {
   position: absolute;
@@ -439,6 +459,7 @@ export class HUD {
   private readonly dmgLayer: HTMLElement
   private readonly killfeed: HTMLElement
   private readonly banner: HTMLElement
+  private readonly lockHint: HTMLElement
   private readonly pain: HTMLElement
   private readonly waveEl: HTMLElement
 
@@ -465,6 +486,7 @@ export class HUD {
       <div class="rf-hitmarker"><span></span><span></span><span></span><span></span></div>
       <div class="rf-killfeed"></div>
       <div class="rf-banner"></div>
+      <div class="rf-lock-hint">Click to aim</div>
       <div class="rf-vitals">
         <div class="rf-vitals-label">Energy Shields</div>
         <div class="rf-shield-segments"></div>
@@ -499,6 +521,7 @@ export class HUD {
     this.dmgLayer = this.root.querySelector('.rf-dmg-layer')!
     this.killfeed = this.root.querySelector('.rf-killfeed')!
     this.banner = this.root.querySelector('.rf-banner')!
+    this.lockHint = this.root.querySelector('.rf-lock-hint')!
     this.pain = this.root.querySelector('.rf-pain')!
     this.waveEl = this.root.querySelector('.rf-wave')!
 
@@ -625,6 +648,11 @@ export class HUD {
     this.banner.classList.remove('rf-show')
     void this.banner.offsetWidth
     this.banner.classList.add('rf-show')
+  }
+
+  /** Shown when pointer lock is lost during gameplay (common on Safari). */
+  setPointerLockHint(visible: boolean): void {
+    this.lockHint.classList.toggle('rf-show', visible)
   }
 
   /** Soft per-frame updates (reserved for animated HUD elements). */

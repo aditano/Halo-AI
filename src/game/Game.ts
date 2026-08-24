@@ -180,12 +180,6 @@ export class Game {
       if (document.hidden) this.last = performance.now()
     })
 
-    this.player.onPointerUnlock(() => {
-      if (this.running && this.damage.alive) {
-        this.pauseToMenu()
-      }
-    })
-
     this.last = performance.now()
     requestAnimationFrame((t) => this.frame(t))
   }
@@ -206,6 +200,9 @@ export class Game {
   }
 
   private pauseToMenu() {
+    this.weapons.setFiring(false)
+    this.weapons.setAds(false)
+    this.hud.setPointerLockHint(false)
     this.enterMenuWorld()
     this.menu.show()
     this.hud.hide()
@@ -287,6 +284,14 @@ export class Game {
     })
     window.addEventListener('keydown', (e) => {
       if (!this.running || this.menu.isVisible) return
+      if (e.code === 'Escape' || e.key === 'Escape') {
+        e.preventDefault()
+        if (this.damage.alive) {
+          if (this.player.locked) document.exitPointerLock()
+          this.pauseToMenu()
+        }
+        return
+      }
       if (e.code === 'KeyR') this.weapons.startReload()
       if (e.code === 'Digit1') this.weapons.switchWeapon('br')
       if (e.code === 'Digit2') this.weapons.switchWeapon('ar')
@@ -386,9 +391,14 @@ export class Game {
         this.player.keys.left ||
         this.player.keys.right
 
+      this.hud.setPointerLockHint(!this.player.locked)
+
       if (this.player.locked) {
         this.weapons.update(dt, moving, this.player.grounded)
         this.updateCrosshairTarget()
+      } else {
+        this.weapons.setFiring(false)
+        this.weapons.setAds(false)
       }
 
       this.damage.update(dt)

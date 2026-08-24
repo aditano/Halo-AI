@@ -60,6 +60,7 @@ interface Decal extends PoolItem {
 const PARTICLE_POOL = 256
 const TRACER_POOL = 64
 const DECAL_POOL = 48
+const RIPPLE_POOL = 12
 const MAX_DECALS_VISIBLE = 40
 
 const _tmpV = new THREE.Vector3()
@@ -90,11 +91,13 @@ export class EffectsManager {
   private readonly tracerMat: THREE.LineBasicMaterial
   private readonly decalMat: THREE.MeshBasicMaterial
   private readonly rippleMat: THREE.MeshBasicMaterial
+  private readonly rippleGeo: THREE.RingGeometry
 
   private readonly activeRipples: {
     mesh: THREE.Mesh
     age: number
     lifetime: number
+    alive: boolean
   }[] = []
 
   constructor(scene: THREE.Scene) {
@@ -137,8 +140,10 @@ export class EffectsManager {
       blending: THREE.AdditiveBlending,
       side: THREE.DoubleSide,
     })
+    this.rippleGeo = new THREE.RingGeometry(0.05, 0.2, 16)
 
     this.initPools()
+    this.initRipplePool()
   }
 
   // —— public spawn API ————————————————————————————————————————————————
@@ -357,8 +362,7 @@ export class EffectsManager {
   }
 
   /** Soften trauma over time; call from game loop. */
-  getScreenShake(dt: number): ScreenShakeState {
-    this.trauma = Math.max(0, this.trauma - dt * 1.35)
+  getScreenShake(_dt: number): ScreenShakeState {
     const shake = this.trauma * this.trauma
     const t = performance.now() * 0.001 + this.shakeSeed
     this.shakeOffset.set(
@@ -384,6 +388,7 @@ export class EffectsManager {
   // —— update / dispose ————————————————————————————————————————————————
 
   update(dt: number): void {
+    this.trauma = Math.max(0, this.trauma - dt * 1.35)
     this.updateParticles(dt)
     this.updateTracers(dt)
     this.updateDecals(dt)
@@ -404,9 +409,9 @@ export class EffectsManager {
       ;(d.mesh.material as THREE.Material).dispose()
     }
     for (const r of this.activeRipples) {
-      r.mesh.geometry.dispose()
       ;(r.mesh.material as THREE.Material).dispose()
     }
+    this.rippleGeo.dispose()
     this.particleGeo.dispose()
     this.particleMat.dispose()
     this.tracerMat.dispose()
@@ -542,24 +547,47 @@ export class EffectsManager {
     }
   }
 
+  private initRipplePool(): void {
+    for (let i = 0; i < RIPPLE_POOL; i++) {
+      const mat = this.rippleMat.clone()
+      const mesh = new THREE.Mesh(this.rippleGeo, mat)
+      mesh.visible = false
+      mesh.frustumCulled = false
+      this.root.add(mesh)
+      this.activeRipples.push({ mesh, age: 0, lifetime: 0.35, alive: false })
+    }
+  }
+
+  private acquireRipple(): (typeof this.activeRipples)[number] | null {
+    for (const r of this.activeRipples) if (!r.alive) return r
+    let oldest = this.activeRipples[0]!
+    for (const r of this.activeRipples) if (r.age > oldest.age) oldest = r
+    return oldest
+  }
+
   private spawnRipple(
     position: THREE.Vector3,
     normal: THREE.Vector3,
     color: number,
     scale: number,
   ): void {
-    const geo = new THREE.RingGeometry(0.05, 0.2, 24)
-    const mat = this.rippleMat.clone()
+    const ripple = this.acquireRipple()
+    if (!ripple) return
+
+    const mesh = ripple.mesh
+    const mat = mesh.material as THREE.MeshBasicMaterial
     mat.color.setHex(color)
-    const mesh = new THREE.Mesh(geo, mat)
     mesh.position.copy(position).addScaledVector(normal, 0.02)
     _tmpV.copy(normal).normalize()
     _tmpEye.copy(position).add(_tmpV)
     _tmpM.lookAt(_tmpEye, position, _up)
     mesh.quaternion.setFromRotationMatrix(_tmpM)
     mesh.scale.setScalar(scale * 0.3)
-    this.root.add(mesh)
-    this.activeRipples.push({ mesh, age: 0, lifetime: 0.35 })
+    mat.opacity = 0.55
+    mesh.visible = true
+    ripple.alive = true
+    ripple.age = 0
+    ripple.lifetime = 0.35
   }
 
   private updateParticles(dt: number): void {
@@ -613,15 +641,13 @@ export class EffectsManager {
   }
 
   private updateRipples(dt: number): void {
-    for (let i = this.activeRipples.length - 1; i >= 0; i--) {
-      const r = this.activeRipples[i]!
+    for (const r of this.activeRipples) {
+      if (!r.alive) continue
       r.age += dt
       const t = r.age / r.lifetime
       if (t >= 1) {
-        r.mesh.geometry.dispose()
-        ;(r.mesh.material as THREE.Material).dispose()
-        r.mesh.removeFromParent()
-        this.activeRipples.splice(i, 1)
+        r.alive = false
+        r.mesh.visible = false
         continue
       }
       r.mesh.scale.setScalar(0.3 + t * 2.2)

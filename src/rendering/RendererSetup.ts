@@ -143,6 +143,7 @@ export function createRenderer(
   let frameBudget = 0;
   let badFrames = 0;
   let displayFps = 60;
+  let pendingPerf: PerformanceSettings | null = null;
 
   const resizeBloom = (nextW: number, nextH: number) => {
     const bloomW = Math.max(1, Math.floor(nextW * currentPerf.bloomScale));
@@ -185,6 +186,12 @@ export function createRenderer(
   window.addEventListener('resize', onWindowResize);
 
   const render = (deltaSeconds = 0) => {
+    if (pendingPerf) {
+      const next = pendingPerf;
+      pendingPerf = null;
+      applyPerformance(next);
+    }
+
     if (deltaSeconds > 0) {
       displayFps = displayFps * 0.9 + (1 / deltaSeconds) * 0.1;
       if (autoDowngrade) {
@@ -198,7 +205,7 @@ export function createRenderer(
             const prevTier = currentPerf.tier;
             const next = downgradeSettings(currentPerf);
             if (next.tier !== prevTier || next.maxPixelRatio !== currentPerf.maxPixelRatio) {
-              applyPerformance(next);
+              pendingPerf = next;
             }
             badFrames = 0;
           }
